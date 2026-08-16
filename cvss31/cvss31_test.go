@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -571,7 +572,16 @@ func readFixture(tb testing.TB, name string) []byte {
 			tb.Errorf("close fixture root: %v", err)
 		}
 	})
-	data, err := root.ReadFile(name)
+	file, err := root.Open(name)
+	if err != nil {
+		tb.Fatalf("open fixture %s: %v", name, err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			tb.Errorf("close fixture %s: %v", name, err)
+		}
+	}()
+	data, err := io.ReadAll(file)
 	if err != nil {
 		tb.Fatalf("read fixture %s: %v", name, err)
 	}

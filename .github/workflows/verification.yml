@@ -38,7 +38,7 @@ jobs:
         run: bash ./.github/scripts/verify.sh static
 
   compatibility:
-    name: Go 1.25 Compatibility
+    name: Go Compatibility
     needs: static
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -49,7 +49,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Setup Go 1.25
+      - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: 1.25.0

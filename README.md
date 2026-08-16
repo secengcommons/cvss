@@ -48,7 +48,7 @@ CVSS 2.0, 3.0 and 3.1 also expose the specification-defined Impact and Exploitab
 go get github.com/cticommons/cvss
 ```
 
-Note that Go 1.25 or greater is required
+Note that Go 1.24 or greater is required
 
 ## Use
 ```go
