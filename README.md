@@ -13,6 +13,8 @@ CVSS 1.0 is unsupported. Its historical material does not define a sufficiently 
 
 `cvss20.Parse` requires the CVSS 2.0 metric order. `cvss30.Parse` and `cvss31.Parse` accept metrics in any order and emit the preferred order. Their grouped methods return Base, Temporal and Environmental scores. `Score` uses the highest explicitly defined metric group. `cvss40.Parse` requires the CVSS 4.0 metric order. Every `ParseBase` function rejects non-Base metrics rather than discarding them.
 
+`cvss.VersionOf` validates a vector and identifies its supported version without replacing the version-specific APIs.
+
 CVSS is owned by FIRST and used with permission. Scores are returned with their canonical vectors.
 
 [Development](docs/development.md) | [Contributing](CONTRIBUTING.md)
