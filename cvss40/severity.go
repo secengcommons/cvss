@@ -33,7 +33,7 @@ var highestEQ3EQ6 = [][][][]int{
 }
 
 func severityDistances(values scoringValues, eq macroVector) [5]float64 {
-	actual := []int{
+	actual := [14]int{
 		rank(values.metrics[0], "NALP"), rank(values.metrics[1], "LH"), rank(values.metrics[2], "NP"),
 		rank(values.metrics[3], "NLH"), rank(values.metrics[4], "NPA"),
 		rank(values.metrics[5], "HLN"), rank(values.metrics[6], "HLN"), rank(values.metrics[7], "HLN"),
@@ -45,7 +45,7 @@ func severityDistances(values scoringValues, eq macroVector) [5]float64 {
 		for _, eq2 := range highestEQ2[eq[1]] {
 			for _, combined := range highestEQ3EQ6[eq[2]][eq[5]] {
 				for _, eq4 := range highestEQ4[eq[3]] {
-					candidate := []int{eq1[0], eq2[0], eq2[1], eq1[1], eq1[2], combined[0], combined[1], combined[2], eq4[0], eq4[1], eq4[2], combined[3], combined[4], combined[5]}
+					candidate := [14]int{eq1[0], eq2[0], eq2[1], eq1[1], eq1[2], combined[0], combined[1], combined[2], eq4[0], eq4[1], eq4[2], combined[3], combined[4], combined[5]}
 					if !dominates(actual, candidate) {
 						continue
 					}
@@ -61,7 +61,7 @@ func severityDistances(values scoringValues, eq macroVector) [5]float64 {
 	panic("CVSS 4.0 vector has no highest-severity vector")
 }
 
-func severityProportion(actual, candidate []int, groupDepth int, indices ...int) float64 {
+func severityProportion(actual, candidate [14]int, groupDepth int, indices ...int) float64 {
 	const step = 0.1
 	distance := 0.0
 	for _, index := range indices {
@@ -79,7 +79,7 @@ func rank(value byte, order string) int {
 	panic("invalid CVSS 4.0 metric value")
 }
 
-func dominates(actual, candidate []int) bool {
+func dominates(actual, candidate [14]int) bool {
 	for index := range actual {
 		if candidate[index] < 0 || actual[index] < candidate[index] {
 			return false
