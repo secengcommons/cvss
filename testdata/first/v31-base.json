@@ -1,0 +1,8 @@
+[
+  {"vector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N","score":0.0,"severity":"NONE"},
+  {"vector":"CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:N","score":3.3,"severity":"LOW"},
+  {"vector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N","score":6.1,"severity":"MEDIUM"},
+  {"vector":"CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H","score":8.8,"severity":"HIGH"},
+  {"vector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H","score":9.8,"severity":"CRITICAL"},
+  {"vector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H","score":10.0,"severity":"CRITICAL"}
+]

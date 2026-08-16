@@ -1,0 +1,12 @@
+{
+  "owner": "Forum of Incident Response and Security Teams, Inc.",
+  "licence": "CVSS is used with permission from FIRST",
+  "terms": "https://www.first.org/cvss/v3.1/specification-document#CVSS-License",
+  "source": "https://www.first.org/cvss/v3.1/examples",
+  "transformation": "selected published Base vector, score and severity values encoded as JSON",
+  "file": {
+    "path": "v31-base.json",
+    "sha256": "279b7b3ad77170d7fc9662e0ff01980914f0256b06bc0a8c790ae2039b1117cc",
+    "length": 559
+  }
+}
