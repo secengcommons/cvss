@@ -7,7 +7,28 @@ import (
 	"strings"
 )
 
-const maxVectorBytes = 256
+const (
+	prefix             = "CVSS:4.0"
+	header             = prefix + "/"
+	maxVectorBytes     = 256
+	maxJSONVectorBytes = maxVectorBytes*len(`\u00ff`) + len(`""`)
+
+	attackVectorIndex              = 0
+	attackComplexityIndex          = 1
+	attackRequirementsIndex        = 2
+	privilegesIndex                = 3
+	userInteractionIndex           = 4
+	vulnerableConfidentialityIndex = 5
+	vulnerableIntegrityIndex       = 6
+	vulnerableAvailabilityIndex    = 7
+	subsequentConfidentialityIndex = 8
+	subsequentIntegrityIndex       = 9
+	subsequentAvailabilityIndex    = 10
+	threatMetricIndex              = 0
+	requirementMetricStart         = 1
+	modifiedMetricStart            = 4
+	supplementalMetricStart        = 15
+)
 
 var (
 	// ErrInvalidVector reports malformed, incomplete or unsupported CVSS 4.0 content
@@ -59,7 +80,6 @@ func ParseBase(text string) (Vector, error) {
 	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
 	}
-	const header = "CVSS:4.0/"
 	if !strings.HasPrefix(text, header) || strings.HasSuffix(text, "/") {
 		return Vector{}, ErrInvalidVector
 	}
@@ -84,7 +104,6 @@ func Parse(text string) (Vector, error) {
 	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
 	}
-	const header = "CVSS:4.0/"
 	if !strings.HasPrefix(text, header) {
 		return Vector{}, ErrInvalidVector
 	}
@@ -159,7 +178,7 @@ func (vector Vector) String() string {
 	}
 	var text strings.Builder
 	text.Grow(vector.textLength())
-	text.WriteString("CVSS:4.0")
+	text.WriteString(prefix)
 	for index, name := range metricNames {
 		text.WriteByte('/')
 		text.WriteString(name)
@@ -179,7 +198,7 @@ func (vector Vector) String() string {
 }
 
 func (vector Vector) textLength() int {
-	length := len("CVSS:4.0")
+	length := len(prefix)
 	for _, name := range metricNames {
 		length += len(name) + 3
 	}
@@ -214,7 +233,7 @@ func (vector Vector) MarshalJSON() ([]byte, error) {
 }
 
 func (vector Vector) appendText(text []byte) []byte {
-	text = append(text, "CVSS:4.0"...)
+	text = append(text, prefix...)
 	for index, name := range metricNames {
 		text = append(text, '/')
 		text = append(text, name...)
@@ -283,9 +302,9 @@ func (vector Vector) Nomenclature() string {
 	if !vector.valid {
 		return ""
 	}
-	threat := defined(vector.optional[0])
+	threat := defined(vector.optional[threatMetricIndex])
 	environmental := false
-	for _, value := range vector.optional[1:15] {
+	for _, value := range vector.optional[requirementMetricStart:supplementalMetricStart] {
 		environmental = environmental || defined(value)
 	}
 	switch {
@@ -341,17 +360,19 @@ type scoringValues struct {
 
 func (vector Vector) effective() scoringValues {
 	values := scoringValues{metrics: vector.values, exploitation: 'A', requirements: [3]byte{'H', 'H', 'H'}}
-	if defined(vector.optional[0]) {
-		values.exploitation = optionalValue(0, vector.optional[0])[0]
+	if defined(vector.optional[threatMetricIndex]) {
+		values.exploitation = optionalValue(threatMetricIndex, vector.optional[threatMetricIndex])[0]
 	}
-	for index := range 3 {
-		if defined(vector.optional[index+1]) {
-			values.requirements[index] = optionalValue(index+1, vector.optional[index+1])[0]
+	for index := range values.requirements {
+		optionalIndex := index + requirementMetricStart
+		if defined(vector.optional[optionalIndex]) {
+			values.requirements[index] = optionalValue(optionalIndex, vector.optional[optionalIndex])[0]
 		}
 	}
-	for index := range 11 {
-		if defined(vector.optional[index+4]) {
-			values.metrics[index] = optionalValue(index+4, vector.optional[index+4])[0]
+	for index := range values.metrics {
+		optionalIndex := index + modifiedMetricStart
+		if defined(vector.optional[optionalIndex]) {
+			values.metrics[index] = optionalValue(optionalIndex, vector.optional[optionalIndex])[0]
 		}
 	}
 	return values
@@ -514,9 +535,9 @@ func equivalence(values scoringValues) macroVector {
 
 func equivalence1(values [11]byte) int {
 	eq1 := 2
-	if values[0] == 'N' && values[3] == 'N' && values[4] == 'N' {
+	if values[attackVectorIndex] == 'N' && values[privilegesIndex] == 'N' && values[userInteractionIndex] == 'N' {
 		eq1 = 0
-	} else if values[0] != 'P' && (values[0] == 'N' || values[3] == 'N' || values[4] == 'N') {
+	} else if values[attackVectorIndex] != 'P' && (values[attackVectorIndex] == 'N' || values[privilegesIndex] == 'N' || values[userInteractionIndex] == 'N') {
 		eq1 = 1
 	}
 	return eq1
@@ -524,7 +545,7 @@ func equivalence1(values [11]byte) int {
 
 func equivalence2(values [11]byte) int {
 	eq2 := 1
-	if values[1] == 'L' && values[2] == 'N' {
+	if values[attackComplexityIndex] == 'L' && values[attackRequirementsIndex] == 'N' {
 		eq2 = 0
 	}
 	return eq2
@@ -532,9 +553,9 @@ func equivalence2(values [11]byte) int {
 
 func equivalence3(values [11]byte) int {
 	eq3 := 2
-	if values[5] == 'H' && values[6] == 'H' {
+	if values[vulnerableConfidentialityIndex] == 'H' && values[vulnerableIntegrityIndex] == 'H' {
 		eq3 = 0
-	} else if values[5] == 'H' || values[6] == 'H' || values[7] == 'H' {
+	} else if values[vulnerableConfidentialityIndex] == 'H' || values[vulnerableIntegrityIndex] == 'H' || values[vulnerableAvailabilityIndex] == 'H' {
 		eq3 = 1
 	}
 	return eq3
@@ -542,9 +563,9 @@ func equivalence3(values [11]byte) int {
 
 func equivalence4(values [11]byte) int {
 	eq4 := 2
-	if values[9] == 'S' || values[10] == 'S' {
+	if values[subsequentIntegrityIndex] == 'S' || values[subsequentAvailabilityIndex] == 'S' {
 		eq4 = 0
-	} else if values[8] == 'H' || values[9] == 'H' || values[10] == 'H' {
+	} else if values[subsequentConfidentialityIndex] == 'H' || values[subsequentIntegrityIndex] == 'H' || values[subsequentAvailabilityIndex] == 'H' {
 		eq4 = 1
 	}
 	return eq4

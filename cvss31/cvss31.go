@@ -7,8 +7,24 @@ import (
 )
 
 const (
-	header         = "CVSS:3.1/"
-	maxVectorBytes = 256
+	prefix             = "CVSS:3.1"
+	header             = prefix + "/"
+	maxVectorBytes     = 256
+	maxJSONVectorBytes = maxVectorBytes*len(`\u00ff`) + len(`""`)
+
+	attackVectorIndex               = 0
+	attackComplexityIndex           = 1
+	privilegesIndex                 = 2
+	userInteractionIndex            = 3
+	scopeIndex                      = 4
+	confidentialityIndex            = 5
+	integrityIndex                  = 6
+	availabilityIndex               = 7
+	temporalMetricCount             = 3
+	confidentialityRequirementIndex = 3
+	integrityRequirementIndex       = 4
+	availabilityRequirementIndex    = 5
+	modifiedMetricStart             = 6
 )
 
 var (
@@ -213,7 +229,7 @@ func (vector Vector) String() string {
 	}
 	var text strings.Builder
 	text.Grow(vector.textLength())
-	writeBase(&text, "CVSS:3.1", vector.values)
+	writeBase(&text, prefix, vector.values)
 	for index, value := range vector.optional {
 		if value != 0 && value != 'X' {
 			writeMetric(&text, optionalNames[index], value)
@@ -223,7 +239,7 @@ func (vector Vector) String() string {
 }
 
 func (vector Vector) textLength() int {
-	length := 44
+	length := len(prefix + "/AV:X/AC:X/PR:X/UI:X/S:X/C:X/I:X/A:X")
 	for index, value := range vector.optional {
 		if value != 0 && value != 'X' {
 			length += len(optionalNames[index]) + 3
@@ -275,7 +291,7 @@ func (vector Vector) MarshalJSON() ([]byte, error) {
 }
 
 func (vector Vector) appendText(text []byte) []byte {
-	text = append(text, "CVSS:3.1"...)
+	text = append(text, prefix...)
 	for index, name := range metricNames {
 		text = append(text, '/')
 		text = append(text, name...)
@@ -376,7 +392,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 		return Score{}, nil
 	}
 	raw := impact + exploitability(metrics)
-	if metrics[4] == 'C' {
+	if metrics[scopeIndex] == 'C' {
 		raw *= 1.08
 	}
 	modifiedBase := float64(roundup(clamp(raw, 10))) / 10
@@ -398,7 +414,7 @@ func (vector Vector) Score() (Score, error) {
 }
 
 func (vector Vector) hasTemporal() bool {
-	for _, value := range vector.optional[:3] {
+	for _, value := range vector.optional[:temporalMetricCount] {
 		if value != 0 && value != 'X' {
 			return true
 		}
@@ -407,7 +423,7 @@ func (vector Vector) hasTemporal() bool {
 }
 
 func (vector Vector) hasEnvironmental() bool {
-	for _, value := range vector.optional[3:] {
+	for _, value := range vector.optional[temporalMetricCount:] {
 		if value != 0 && value != 'X' {
 			return true
 		}
@@ -421,36 +437,36 @@ func baseScore(metrics [8]byte) int {
 		return 0
 	}
 	raw := impact + exploitability(metrics)
-	if metrics[4] == 'C' {
+	if metrics[scopeIndex] == 'C' {
 		raw *= 1.08
 	}
 	return roundup(clamp(raw, 10))
 }
 
 func impact(metrics [8]byte) float64 {
-	iss := 1 - (1-impactWeight(metrics[5]))*(1-impactWeight(metrics[6]))*(1-impactWeight(metrics[7]))
-	if metrics[4] == 'C' {
+	iss := 1 - (1-impactWeight(metrics[confidentialityIndex]))*(1-impactWeight(metrics[integrityIndex]))*(1-impactWeight(metrics[availabilityIndex]))
+	if metrics[scopeIndex] == 'C' {
 		return 7.52*(iss-.029) - 3.25*pow15(iss-.02)
 	}
 	return 6.42 * iss
 }
 
 func modifiedImpact(metrics [8]byte, optional [14]byte) float64 {
-	confidentiality := requirementWeight(optional[3]) * impactWeight(metrics[5])
-	integrity := requirementWeight(optional[4]) * impactWeight(metrics[6])
-	availability := requirementWeight(optional[5]) * impactWeight(metrics[7])
+	confidentiality := requirementWeight(optional[confidentialityRequirementIndex]) * impactWeight(metrics[confidentialityIndex])
+	integrity := requirementWeight(optional[integrityRequirementIndex]) * impactWeight(metrics[integrityIndex])
+	availability := requirementWeight(optional[availabilityRequirementIndex]) * impactWeight(metrics[availabilityIndex])
 	miss := clamp(1-(1-confidentiality)*(1-integrity)*(1-availability), .915)
-	if metrics[4] == 'C' {
+	if metrics[scopeIndex] == 'C' {
 		return 7.52*(miss-.029) - 3.25*pow13(miss*.9731-.02)
 	}
 	return 6.42 * miss
 }
 
 func exploitability(metrics [8]byte) float64 {
-	av := attackVectorWeight(metrics[0])
-	ac := attackComplexityWeight(metrics[1])
-	pr := privilegesWeight(metrics[2], metrics[4])
-	ui := userInteractionWeight(metrics[3])
+	av := attackVectorWeight(metrics[attackVectorIndex])
+	ac := attackComplexityWeight(metrics[attackComplexityIndex])
+	pr := privilegesWeight(metrics[privilegesIndex], metrics[scopeIndex])
+	ui := userInteractionWeight(metrics[userInteractionIndex])
 	return 8.22 * av * ac * pr * ui
 }
 
@@ -577,7 +593,7 @@ func confidenceWeight(value byte) float64 {
 func (vector Vector) modifiedMetrics() [8]byte {
 	metrics := vector.values
 	for index := range 8 {
-		value := vector.optional[index+6]
+		value := vector.optional[index+modifiedMetricStart]
 		if value != 0 && value != 'X' {
 			metrics[index] = value
 		}

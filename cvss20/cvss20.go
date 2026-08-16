@@ -7,7 +7,23 @@ import (
 	"strings"
 )
 
-const maxVectorBytes = 256
+const (
+	maxVectorBytes     = 256
+	maxJSONVectorBytes = maxVectorBytes*len(`\u00ff`) + len(`""`)
+
+	attackVectorIndex               = 0
+	attackComplexityIndex           = 1
+	authenticationIndex             = 2
+	confidentialityIndex            = 3
+	integrityIndex                  = 4
+	availabilityIndex               = 5
+	temporalMetricCount             = 3
+	collateralDamageIndex           = 3
+	targetDistributionIndex         = 4
+	confidentialityRequirementIndex = 5
+	integrityRequirementIndex       = 6
+	availabilityRequirementIndex    = 7
+)
 
 var (
 	// ErrInvalidVector reports malformed, incomplete or unsupported CVSS 2.0 content
@@ -173,16 +189,13 @@ func (vector Vector) String() string {
 }
 
 func (vector Vector) textLength() int {
-	length := 20
-	length += len(vector.values)
-	count := 6
+	length := len("AV:X/AC:X/Au:X/C:X/I:X/A:X")
 	for index, value := range vector.optional {
 		if value != 0 {
-			length += len(optionalNames[index]) + len(optionalValue(index, value)) + 1
-			count++
+			length += len(optionalNames[index]) + len(optionalValue(index, value)) + 2
 		}
 	}
-	return length + count - 1
+	return length
 }
 
 // AppendText appends the canonical vector to text
@@ -319,7 +332,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 	adjusted := adjustedImpact(vector.values, vector.optional)
 	adjustedBase := baseFromImpact(vector.values, adjusted)
 	adjustedTemporal := temporalScore(adjustedBase, vector.optional)
-	value := (float64(adjustedTemporal)/10 + (10-float64(adjustedTemporal)/10)*damageWeight(vector.optional[3])) * distributionWeight(vector.optional[4])
+	value := (float64(adjustedTemporal)/10 + (10-float64(adjustedTemporal)/10)*damageWeight(vector.optional[collateralDamageIndex])) * distributionWeight(vector.optional[targetDistributionIndex])
 	return Score{tenths: round(value)}, nil
 }
 
@@ -328,10 +341,10 @@ func (vector Vector) Score() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
 	}
-	if hasDefined(vector.optional[3:]) {
+	if hasDefined(vector.optional[temporalMetricCount:]) {
 		return vector.EnvironmentalScore()
 	}
-	if hasDefined(vector.optional[:3]) {
+	if hasDefined(vector.optional[:temporalMetricCount]) {
 		return vector.TemporalScore()
 	}
 	return vector.BaseScore()
@@ -352,18 +365,18 @@ func baseFromImpact(values [6]byte, impactValue float64) int {
 	if impactValue == 0 {
 		return 0
 	}
-	exploitability := 20 * accessWeight(values[0]) * complexityWeight(values[1]) * authenticationWeight(values[2])
+	exploitability := 20 * accessWeight(values[attackVectorIndex]) * complexityWeight(values[attackComplexityIndex]) * authenticationWeight(values[authenticationIndex])
 	return round(((.6 * impactValue) + (.4 * exploitability) - 1.5) * 1.176)
 }
 
 func impact(values [6]byte) float64 {
-	return 10.41 * (1 - (1-impactWeight(values[3]))*(1-impactWeight(values[4]))*(1-impactWeight(values[5])))
+	return 10.41 * (1 - (1-impactWeight(values[confidentialityIndex]))*(1-impactWeight(values[integrityIndex]))*(1-impactWeight(values[availabilityIndex])))
 }
 
 func adjustedImpact(values [6]byte, optional [8]byte) float64 {
-	confidentiality := impactWeight(values[3]) * requirementWeight(optional[5])
-	integrity := impactWeight(values[4]) * requirementWeight(optional[6])
-	availability := impactWeight(values[5]) * requirementWeight(optional[7])
+	confidentiality := impactWeight(values[confidentialityIndex]) * requirementWeight(optional[confidentialityRequirementIndex])
+	integrity := impactWeight(values[integrityIndex]) * requirementWeight(optional[integrityRequirementIndex])
+	availability := impactWeight(values[availabilityIndex]) * requirementWeight(optional[availabilityRequirementIndex])
 	return clamp(10.41*(1-(1-confidentiality)*(1-integrity)*(1-availability)), 10)
 }
 

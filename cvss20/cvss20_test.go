@@ -39,10 +39,36 @@ func TestPublishedScores(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parse(%q): %v", test.Vector, err)
 		}
+		assertCanonicalEncoders(t, vector)
 		assertScore(t, vector.BaseScore, test.Base)
 		assertScore(t, vector.TemporalScore, test.Temporal)
 		assertScore(t, vector.EnvironmentalScore, test.Environmental)
 		assertScore(t, vector.Score, test.Final)
+	}
+}
+
+func assertCanonicalEncoders(tb testing.TB, vector Vector) {
+	tb.Helper()
+
+	want := vector.String()
+	appended, err := vector.AppendText(nil)
+	if err != nil {
+		tb.Fatalf("AppendText(%q): %v", want, err)
+	}
+	marshalled, err := vector.MarshalText()
+	if err != nil {
+		tb.Fatalf("MarshalText(%q): %v", want, err)
+	}
+	encoded, err := vector.MarshalJSON()
+	if err != nil {
+		tb.Fatalf("MarshalJSON(%q): %v", want, err)
+	}
+	var jsonText string
+	if err := json.Unmarshal(encoded, &jsonText); err != nil {
+		tb.Fatalf("decode MarshalJSON(%q): %v", want, err)
+	}
+	if string(appended) != want || string(marshalled) != want || jsonText != want {
+		tb.Fatalf("canonical encoders differ: String %q, AppendText %q, MarshalText %q, MarshalJSON %q", want, appended, marshalled, jsonText)
 	}
 }
 

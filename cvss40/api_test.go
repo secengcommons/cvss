@@ -126,7 +126,7 @@ func assertDecodeBounds(t *testing.T, source string, before Vector) {
 	if err := decoded.UnmarshalText(make([]byte, maxVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
 		t.Fatalf("oversized text changed receiver: %v", err)
 	}
-	if err := decoded.UnmarshalJSON(make([]byte, maxVectorBytes*6+3)); !errors.Is(err, ErrInvalidVector) || decoded != before {
+	if err := decoded.UnmarshalJSON(make([]byte, maxJSONVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
 		t.Fatalf("oversized JSON changed receiver: %v", err)
 	}
 }

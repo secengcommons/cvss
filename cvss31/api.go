@@ -70,7 +70,7 @@ func (vector *Vector) UnmarshalText(text []byte) error {
 
 // UnmarshalJSON replaces the receiver only after complete JSON string and vector validation
 func (vector *Vector) UnmarshalJSON(data []byte) error {
-	if vector == nil || len(data) == 0 || len(data) > maxVectorBytes*6+2 {
+	if vector == nil || len(data) == 0 || len(data) > maxJSONVectorBytes {
 		return ErrInvalidVector
 	}
 	var text string

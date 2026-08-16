@@ -104,6 +104,7 @@ func checkBaseReference(tb testing.TB, test referenceVector, corrections map[str
 	if err != nil {
 		tb.Fatalf("ParseBase(%q): %v", test.Vector, err)
 	}
+	assertCanonicalEncoders(tb, vector)
 	expected, corrected := correctedScore(tb, test.Vector+"/E:A", test.Score, corrections)
 	score := scoreOf(tb, vector)
 	if vector.String() != test.Vector || score.Float64() != expected || score.Severity() != severityOf(expected) {
@@ -178,6 +179,7 @@ func TestPublishedBaseVectors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseBase(%q): %v", test.Vector, err)
 		}
+		assertCanonicalEncoders(t, vector)
 		score := scoreOf(t, vector)
 		if score.Float64() != test.Score || score.String() == "" || score.Severity() != test.Severity {
 			t.Fatalf("published vector %q = %#v, %v", test.Vector, vector, err)
@@ -200,6 +202,7 @@ func TestMacroVectors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parse(%q): %v", test.Vector, err)
 		}
+		assertCanonicalEncoders(t, vector)
 		score := scoreOf(t, vector)
 		if vector.String() != test.Vector || score.Float64() != test.Score || score.Severity() != test.Severity {
 			t.Fatalf("Parse(%q) = %q %s %s", test.Vector, vector.String(), score, score.Severity())
@@ -267,12 +270,38 @@ func checkCompleteReference(tb testing.TB, test referenceVector, corrections map
 	if err != nil {
 		tb.Fatalf("Parse(%q): %v", test.Vector, err)
 	}
+	assertCanonicalEncoders(tb, vector)
 	expected, corrected := correctedScore(tb, test.Vector, test.Score, corrections)
 	score := scoreOf(tb, vector)
 	if score.Float64() != expected || score.Severity() != severityOf(expected) {
 		tb.Fatalf("Parse(%q) score = %s %s, want %.1f", test.Vector, score, score.Severity(), expected)
 	}
 	return true, corrected
+}
+
+func assertCanonicalEncoders(tb testing.TB, vector Vector) {
+	tb.Helper()
+
+	want := vector.String()
+	appended, err := vector.AppendText(nil)
+	if err != nil {
+		tb.Fatalf("AppendText(%q): %v", want, err)
+	}
+	marshalled, err := vector.MarshalText()
+	if err != nil {
+		tb.Fatalf("MarshalText(%q): %v", want, err)
+	}
+	encoded, err := vector.MarshalJSON()
+	if err != nil {
+		tb.Fatalf("MarshalJSON(%q): %v", want, err)
+	}
+	var jsonText string
+	if err := json.Unmarshal(encoded, &jsonText); err != nil {
+		tb.Fatalf("decode MarshalJSON(%q): %v", want, err)
+	}
+	if string(appended) != want || string(marshalled) != want || jsonText != want {
+		tb.Fatalf("canonical encoders differ: String %q, AppendText %q, MarshalText %q, MarshalJSON %q", want, appended, marshalled, jsonText)
+	}
 }
 
 func correctedScore(tb testing.TB, vector string, score float64, corrections map[string]roundingCorrection) (float64, bool) {

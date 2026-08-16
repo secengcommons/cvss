@@ -34,10 +34,10 @@ var highestEQ3EQ6 = [][][][]int{
 
 func severityDistances(values scoringValues, eq macroVector) [5]float64 {
 	actual := [14]int{
-		rank(values.metrics[0], "NALP"), rank(values.metrics[1], "LH"), rank(values.metrics[2], "NP"),
-		rank(values.metrics[3], "NLH"), rank(values.metrics[4], "NPA"),
-		rank(values.metrics[5], "HLN"), rank(values.metrics[6], "HLN"), rank(values.metrics[7], "HLN"),
-		rank(values.metrics[8], "HLN"), rank(values.metrics[9], "SHLN"), rank(values.metrics[10], "SHLN"),
+		rank(values.metrics[attackVectorIndex], "NALP"), rank(values.metrics[attackComplexityIndex], "LH"), rank(values.metrics[attackRequirementsIndex], "NP"),
+		rank(values.metrics[privilegesIndex], "NLH"), rank(values.metrics[userInteractionIndex], "NPA"),
+		rank(values.metrics[vulnerableConfidentialityIndex], "HLN"), rank(values.metrics[vulnerableIntegrityIndex], "HLN"), rank(values.metrics[vulnerableAvailabilityIndex], "HLN"),
+		rank(values.metrics[subsequentConfidentialityIndex], "HLN"), rank(values.metrics[subsequentIntegrityIndex], "SHLN"), rank(values.metrics[subsequentAvailabilityIndex], "SHLN"),
 		rank(values.requirements[0], "HML"), rank(values.requirements[1], "HML"), rank(values.requirements[2], "HML"),
 	}
 	var distances [5]float64

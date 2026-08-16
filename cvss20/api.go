@@ -51,7 +51,7 @@ func (vector Vector) Exploitability() (float64, error) {
 	if !vector.valid {
 		return 0, ErrInvalidVector
 	}
-	return 20 * accessWeight(vector.values[0]) * complexityWeight(vector.values[1]) * authenticationWeight(vector.values[2]), nil
+	return 20 * accessWeight(vector.values[attackVectorIndex]) * complexityWeight(vector.values[attackComplexityIndex]) * authenticationWeight(vector.values[authenticationIndex]), nil
 }
 
 // UnmarshalText replaces the receiver only after complete vector validation
@@ -64,7 +64,7 @@ func (vector *Vector) UnmarshalText(text []byte) error {
 
 // UnmarshalJSON replaces the receiver only after complete JSON string and vector validation
 func (vector *Vector) UnmarshalJSON(data []byte) error {
-	if vector == nil || len(data) == 0 || len(data) > maxVectorBytes*6+2 {
+	if vector == nil || len(data) == 0 || len(data) > maxJSONVectorBytes {
 		return ErrInvalidVector
 	}
 	var text string
@@ -89,17 +89,17 @@ func unmarshal(vector *Vector, text string) error {
 func baseMetricIndex(name string) int {
 	switch name {
 	case "AV":
-		return 0
+		return attackVectorIndex
 	case "AC":
-		return 1
+		return attackComplexityIndex
 	case "Au":
-		return 2
+		return authenticationIndex
 	case "C":
-		return 3
+		return confidentialityIndex
 	case "I":
-		return 4
+		return integrityIndex
 	case "A":
-		return 5
+		return availabilityIndex
 	}
 	return -1
 }

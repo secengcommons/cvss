@@ -145,7 +145,7 @@ func assertJSONDecoding(t *testing.T, before Vector) {
 	if err := (*Vector)(nil).UnmarshalJSON([]byte(`"` + want + `"`)); !errors.Is(err, ErrInvalidVector) {
 		t.Fatalf("nil JSON receiver error = %v", err)
 	}
-	if err := encoded.UnmarshalJSON(make([]byte, maxVectorBytes*6+3)); !errors.Is(err, ErrInvalidVector) || encoded != before {
+	if err := encoded.UnmarshalJSON(make([]byte, maxJSONVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || encoded != before {
 		t.Fatalf("oversized JSON changed receiver: %v", err)
 	}
 }

@@ -50,7 +50,7 @@ func (vector *Vector) UnmarshalText(text []byte) error {
 
 // UnmarshalJSON replaces the receiver only after complete JSON string and vector validation
 func (vector *Vector) UnmarshalJSON(data []byte) error {
-	if vector == nil || len(data) == 0 || len(data) > maxVectorBytes*6+2 {
+	if vector == nil || len(data) == 0 || len(data) > maxJSONVectorBytes {
 		return ErrInvalidVector
 	}
 	var text string
@@ -75,27 +75,27 @@ func unmarshal(vector *Vector, text string) error {
 func requiredMetricIndex(name string) int {
 	switch name {
 	case "AV":
-		return 0
+		return attackVectorIndex
 	case "AC":
-		return 1
+		return attackComplexityIndex
 	case "AT":
-		return 2
+		return attackRequirementsIndex
 	case "PR":
-		return 3
+		return privilegesIndex
 	case "UI":
-		return 4
+		return userInteractionIndex
 	case "VC":
-		return 5
+		return vulnerableConfidentialityIndex
 	case "VI":
-		return 6
+		return vulnerableIntegrityIndex
 	case "VA":
-		return 7
+		return vulnerableAvailabilityIndex
 	case "SC":
-		return 8
+		return subsequentConfidentialityIndex
 	case "SI":
-		return 9
+		return subsequentIntegrityIndex
 	case "SA":
-		return 10
+		return subsequentAvailabilityIndex
 	}
 	return -1
 }
