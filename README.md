@@ -17,7 +17,7 @@ CVSS 1.0 is unsupported. Its historical material does not define a sufficiently 
 
 Each version package exposes a concrete `Vector`. `Metric` looks up one defined metric and `WithMetric` returns a separately validated vector without changing its source. CVSS 2.0, 3.0 and 3.1 expose their unrounded Impact and Exploitability subscores. Text and JSON decoding replace their receiver only after complete validation.
 
-`AppendText` writes canonical output into caller-owned capacity without allocation. `String`, `MarshalText` and `MarshalJSON` allocate the returned value they own.
+`Vector.AppendText` and `Score.AppendText` write canonical output into caller-owned capacity without allocation. Their `String` methods and the vector marshalling methods allocate the value they return.
 
 CVSS is owned by FIRST and used with permission. Scores are returned with their canonical vectors.
 

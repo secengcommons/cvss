@@ -4,7 +4,6 @@ package cvss20
 import (
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -499,8 +498,16 @@ func (score Score) Tenths() int { return score.tenths }
 // Float64 returns the score as a decimal value
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
+// AppendText appends the score with one decimal place
+func (score Score) AppendText(text []byte) []byte {
+	if score.tenths == 100 {
+		return append(text, "10.0"...)
+	}
+	return append(text, "0123456789"[score.tenths/10], '.', "0123456789"[score.tenths%10])
+}
+
 // String returns the score with one decimal place
-func (score Score) String() string { return strconv.FormatFloat(score.Float64(), 'f', 1, 64) }
+func (score Score) String() string { return string(score.AppendText(make([]byte, 0, 4))) }
 
 func round(value float64) int { return int(value*10 + .5) }
 

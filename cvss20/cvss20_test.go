@@ -279,7 +279,8 @@ func TestScoreRepresentation(t *testing.T) {
 
 	for _, tenths := range []int{0, 1, 49, 100} {
 		score := Score{tenths: tenths}
-		if score.Tenths() != tenths || score.Float64() != float64(tenths)/10 || score.String() != fmt.Sprintf("%.1f", score.Float64()) {
+		if score.Tenths() != tenths || score.Float64() != float64(tenths)/10 || score.String() != fmt.Sprintf("%.1f", score.Float64()) ||
+			string(score.AppendText([]byte("score="))) != "score="+score.String() {
 			t.Fatalf("score = %d %.1f %q", score.Tenths(), score.Float64(), score.String())
 		}
 	}

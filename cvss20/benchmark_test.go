@@ -152,6 +152,26 @@ func BenchmarkEnvironmentalScore(b *testing.B) {
 	benchmarkScore, benchmarkError = score, err
 }
 
+func BenchmarkScoreFormatting(b *testing.B) {
+	vector := mustParseBaseBenchmark(b)
+	score, err := vector.Score()
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Run("String", func(b *testing.B) {
+		for b.Loop() {
+			benchmarkText = score.String()
+		}
+	})
+	b.Run("AppendText", func(b *testing.B) {
+		buffer := make([]byte, 0, 4)
+		for b.Loop() {
+			buffer = score.AppendText(buffer[:0])
+		}
+		benchmarkBytes = buffer
+	})
+}
+
 func BenchmarkMarshalJSON(b *testing.B) {
 	vector := mustParseBaseBenchmark(b)
 	var data []byte

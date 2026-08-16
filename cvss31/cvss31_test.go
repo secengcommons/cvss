@@ -431,7 +431,8 @@ func TestScoreBoundaries(t *testing.T) {
 
 	for tenths, severity := range map[int]string{0: "NONE", 1: "LOW", 39: "LOW", 40: "MEDIUM", 69: "MEDIUM", 70: "HIGH", 89: "HIGH", 90: "CRITICAL", 100: "CRITICAL"} {
 		score := Score{tenths: tenths}
-		if score.Severity() != severity {
+		if score.Severity() != severity || score.String() != fmt.Sprintf("%.1f", score.Float64()) ||
+			string(score.AppendText([]byte("score="))) != "score="+score.String() {
 			t.Fatalf("Score{%d}.Severity() = %q", tenths, score.Severity())
 		}
 	}

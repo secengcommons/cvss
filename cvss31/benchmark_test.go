@@ -127,6 +127,13 @@ func BenchmarkScoreFormatting(b *testing.B) {
 			benchmarkText = score.String()
 		}
 	})
+	b.Run("AppendText", func(b *testing.B) {
+		buffer := make([]byte, 0, 4)
+		for b.Loop() {
+			buffer = score.AppendText(buffer[:0])
+		}
+		benchmarkBytes = buffer
+	})
 	b.Run("Severity", func(b *testing.B) {
 		for b.Loop() {
 			benchmarkText = score.Severity()
