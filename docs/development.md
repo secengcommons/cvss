@@ -11,6 +11,6 @@ Mode | Scope
 `static` | Module drift, shell, `go fix`, format, vet, lint, vulnerabilities and build
 `test` | Shuffled tests, atomic coverage and race detection
 `campaign` | Bounded execution of every fuzz target
-`self-test` | Failure proof for coverage, `go fix` and `modernize`
+`self-test` | Failure proof for coverage, formula qualification, `go fix` and `modernize`
 
 First-party packages require 100% statement coverage from the raw atomic profile. `go fix` and `modernize` are blocking controls.

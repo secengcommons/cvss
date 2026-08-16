@@ -138,6 +138,60 @@ EOF
   printf 'Go fix and modernize rejected legacy source.\n'
 )
 
+formula_mutation_self_test() (
+  local fixture output temp_root
+  temp_root=${TMPDIR:-/tmp}
+  fixture=$(mktemp -d "$temp_root/cticommons-cvss-formula-test.XXXXXX")
+  case "$fixture" in
+    "$temp_root"/cticommons-cvss-formula-test.*) ;;
+    *) printf 'Unsafe formula fixture: %s\n' "$fixture" >&2; return 1 ;;
+  esac
+  trap 'rm -rf -- "$fixture"' EXIT
+  cp -- go.mod go.sum "$fixture/"
+  cp -R -- cvss20 cvss30 cvss31 cvss40 testdata "$fixture/"
+  output=$fixture/result.out
+
+  reject_mutation() {
+    local file old new package test
+    file=$1
+    old=$2
+    new=$3
+    package=$4
+    test=$5
+    cp -- "$repository_root/$file" "$fixture/$file"
+    awk -v old="$old" -v new="$new" '
+      {
+        position = index($0, old)
+        if (position != 0) {
+          $0 = substr($0, 1, position - 1) new substr($0, position + length(old))
+          changed++
+        }
+        print
+      }
+      END { if (changed != 1) exit 2 }
+    ' "$fixture/$file" >"$fixture/mutated.go" || return 1
+    mv -- "$fixture/mutated.go" "$fixture/$file"
+    if (cd -- "$fixture" && go test -count=1 -run "^${test}$" "$package") >"$output" 2>&1; then
+      printf 'Formula mutation survived: %s\n' "$file" >&2
+      return 1
+    fi
+    grep -Fq -- "--- FAIL: $test" "$output" || {
+      cat "$output" >&2
+      return 1
+    }
+  }
+
+  reject_mutation cvss20/cvss20.go '.646' '.5' ./cvss20 TestBaseMatchesIndependentFormula
+  reject_mutation cvss20/cvss20.go 'value*10 + .5' 'value*10 + .4' ./cvss20 TestBaseMatchesIndependentFormula
+  reject_mutation cvss30/cvss30.go 'math.Pow(miss-.02, 15)' 'math.Pow(miss-.02, 13)' ./cvss30 TestEnvironmentalFormulaVersionBoundary
+  reject_mutation cvss30/cvss30.go 'math.Ceil(value * 10)' 'math.Floor(value * 10)' ./cvss30 TestRoundupUsesDirectCeiling
+  reject_mutation cvss31/cvss31.go 'math.Pow(miss*.9731-.02, 13)' 'math.Pow(miss-.02, 15)' ./cvss31 TestEnvironmentalFormulaVersionBoundary
+  reject_mutation cvss31/cvss31.go 'math.Round(value * 100000)' 'value * 100000' ./cvss31 TestRoundupUsesFiveDecimalIntermediate
+  reject_mutation cvss40/macro_scores.go '0:      100,' '0:      99,' ./cvss40 TestMacroVectors
+  reject_mutation cvss40/cvss40.go '(value+epsilon)*10' 'value*10' ./cvss40 TestCompleteReferenceSet
+  printf 'Formula qualification killed 8 mutations.\n'
+)
+
 run_static() {
   local packages
   cd -- "$repository_root"
@@ -148,6 +202,7 @@ run_static() {
   step 'Shell Analysis' go tool shellcheck ./.github/scripts/verify.sh
   step 'Coverage Self-Test' coverage_self_test
   step 'Modernisation Self-Test' modernisation_self_test
+  step 'Formula Mutation Self-Test' formula_mutation_self_test
   packages=$(production_packages)
   if [[ -z "$packages" ]]; then
     printf '\nNo production Go packages exist; source analysis is dormant.\n'
@@ -193,6 +248,6 @@ case "${1:-}" in
   static) run_static ;;
   test) run_tests ;;
   campaign) run_campaign ;;
-  self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test ;;
+  self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test ;;
   *) printf 'Usage: %s all|static|test|campaign|self-test\n' "${0##*/}" >&2; exit 2 ;;
 esac

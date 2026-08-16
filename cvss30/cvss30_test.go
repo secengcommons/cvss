@@ -307,6 +307,16 @@ func TestPublishedFloatingBoundary(t *testing.T) {
 	assertScore(t, vector.EnvironmentalScore, 9.3)
 }
 
+func TestEnvironmentalFormulaVersionBoundary(t *testing.T) {
+	t.Parallel()
+
+	vector, err := Parse("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N/CR:H/IR:H/AR:H/MAV:L/MAC:L/MPR:H/MUI:N/MS:C/MC:N/MI:N/MA:H")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	assertScore(t, vector.EnvironmentalScore, 8.1)
+}
+
 func TestCanonicalEncoding(t *testing.T) {
 	t.Parallel()
 

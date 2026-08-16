@@ -17,4 +17,4 @@ CVSS 1.0 is unsupported. Its historical material does not define a sufficiently 
 
 CVSS is owned by FIRST and used with permission. Scores are returned with their canonical vectors.
 
-[Development](docs/development.md) | [Contributing](CONTRIBUTING.md)
+[Qualification](docs/qualification.md) | [Development](docs/development.md) | [Contributing](CONTRIBUTING.md)
