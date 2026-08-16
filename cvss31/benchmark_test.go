@@ -58,6 +58,19 @@ func BenchmarkParseComplete(b *testing.B) {
 	benchmarkVector = vector
 }
 
+func BenchmarkParseCompleteAllMetrics(b *testing.B) {
+	const text = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N/E:F/RL:O/RC:C/CR:L/IR:M/AR:H/MAV:A/MAC:H/MPR:L/MUI:R/MS:U/MC:L/MI:H/MA:N"
+	var vector Vector
+	for b.Loop() {
+		var err error
+		vector, err = Parse(text)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	benchmarkVector = vector
+}
+
 func BenchmarkScore(b *testing.B) {
 	vector, err := Parse("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N/RL:O/CR:L")
 	if err != nil {

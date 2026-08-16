@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-const maxVectorBytes = 256
+const (
+	header         = "CVSS:3.0/"
+	maxVectorBytes = 256
+)
 
 var (
 	// ErrInvalidVector reports malformed, incomplete or unsupported CVSS 3.0 content
@@ -58,26 +61,12 @@ func Parse(text string) (Vector, error) {
 }
 
 func parse(text string, complete bool) (Vector, error) {
-	const header = "CVSS:3.0/"
 	if !validLength(text) || !strings.HasPrefix(text, header) {
 		return Vector{}, ErrInvalidVector
 	}
-	vector := Vector{valid: true}
-	remaining := text[len(header):]
-	for len(remaining) > 0 {
-		part := remaining
-		if slash := strings.IndexByte(remaining, '/'); slash >= 0 {
-			part, remaining = remaining[:slash], remaining[slash+1:]
-		} else {
-			remaining = ""
-		}
-		name, value, valid := parseMetric(part)
-		if !valid || !setMetric(&vector, name, value, complete) {
-			if !complete && optionalIndex(name) >= 0 {
-				return Vector{}, ErrNonBaseVector
-			}
-			return Vector{}, ErrInvalidVector
-		}
+	vector, err := parseValues(text, complete)
+	if err != nil {
+		return Vector{}, err
 	}
 	if strings.HasSuffix(text, "/") {
 		return Vector{}, ErrInvalidVector
@@ -89,7 +78,98 @@ func parse(text string, complete bool) (Vector, error) {
 	}
 	normaliseNotDefined(&vector.optional)
 	vector.baseTenths = baseScore(vector.values)
+	vector.valid = true
 	return vector, nil
+}
+
+func parseValues(text string, complete bool) (Vector, error) {
+	vector, position, ordered := parseOrderedBase(text, len(header))
+	if ordered && !complete {
+		if err := parseMetrics(&vector, text[position:], false); err != nil {
+			return Vector{}, err
+		}
+		return vector, nil
+	}
+	if ordered {
+		candidate := vector
+		if parseOrderedOptional(&candidate, text, position) {
+			return candidate, nil
+		}
+	}
+	var flexible Vector
+	err := parseMetrics(&flexible, text[len(header):], complete)
+	return flexible, err
+}
+
+func parseOrderedOptional(vector *Vector, text string, position int) bool {
+	for index, name := range optionalNames {
+		if position == len(text) {
+			return true
+		}
+		if position+len(name)+2 > len(text) || text[position:position+len(name)] != name || text[position+len(name)] != ':' {
+			continue
+		}
+		value := text[position+len(name)+1]
+		if strings.IndexByte(optionalValues[index], value) < 0 {
+			return false
+		}
+		vector.optional[index] = value
+		position += len(name) + 2
+		if position < len(text) {
+			if text[position] != '/' {
+				return false
+			}
+			position++
+		}
+	}
+	return position == len(text)
+}
+
+func parseOrderedBase(text string, position int) (Vector, int, bool) {
+	var vector Vector
+	for index, name := range metricNames {
+		if index > 0 {
+			if position >= len(text) || text[position] != '/' {
+				return Vector{}, 0, false
+			}
+			position++
+		}
+		if position+len(name)+2 > len(text) || text[position:position+len(name)] != name || text[position+len(name)] != ':' {
+			return Vector{}, 0, false
+		}
+		value := text[position+len(name)+1]
+		if strings.IndexByte(metricValues[index], value) < 0 {
+			return Vector{}, 0, false
+		}
+		vector.values[index] = value
+		position += len(name) + 2
+	}
+	if position < len(text) {
+		if text[position] != '/' {
+			return Vector{}, 0, false
+		}
+		position++
+	}
+	return vector, position, true
+}
+
+func parseMetrics(vector *Vector, remaining string, complete bool) error {
+	for len(remaining) > 0 {
+		part := remaining
+		if slash := strings.IndexByte(remaining, '/'); slash >= 0 {
+			part, remaining = remaining[:slash], remaining[slash+1:]
+		} else {
+			remaining = ""
+		}
+		name, value, valid := parseMetric(part)
+		if !valid || !setMetric(vector, name, value, complete) {
+			if !complete && optionalIndex(name) >= 0 {
+				return ErrNonBaseVector
+			}
+			return ErrInvalidVector
+		}
+	}
+	return nil
 }
 
 func parseMetric(part string) (string, byte, bool) {
