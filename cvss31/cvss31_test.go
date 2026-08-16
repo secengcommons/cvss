@@ -41,8 +41,9 @@ func TestPublishedFixtureAttribution(t *testing.T) {
 	t.Parallel()
 
 	var source struct {
-		Owner, Licence, Terms, Source, Transformation string
-		File                                          struct {
+		Owner, Licence, Terms, Transformation string
+		CVSS31Source                          string `json:"cvss_31_source"`
+		Files                                 []struct {
 			Path, SHA256 string
 			Length       int
 		}
@@ -50,12 +51,21 @@ func TestPublishedFixtureAttribution(t *testing.T) {
 	if err := json.Unmarshal(readFixture(t, "source.json"), &source); err != nil {
 		t.Fatalf("decode source record: %v", err)
 	}
-	data := readFixture(t, source.File.Path)
+	var file struct {
+		Path, SHA256 string
+		Length       int
+	}
+	for _, candidate := range source.Files {
+		if candidate.Path == "v31-base.json" {
+			file = candidate
+		}
+	}
+	data := readFixture(t, file.Path)
 	digest := sha256.Sum256(data)
 	if source.Owner != "Forum of Incident Response and Security Teams, Inc." || source.Licence == "" ||
-		source.Terms != "https://www.first.org/cvss/v3.1/specification-document#CVSS-License" ||
-		source.Source != "https://www.first.org/cvss/v3.1/examples" || source.Transformation == "" ||
-		source.File.Path != "v31-base.json" || source.File.Length != len(data) || source.File.SHA256 != fmt.Sprintf("%x", digest) {
+		source.Terms != "https://www.first.org/cvss/v4.0/specification-document#CVSS-License" ||
+		source.CVSS31Source != "https://www.first.org/cvss/v3.1/examples" || source.Transformation == "" ||
+		file.Path != "v31-base.json" || file.Length != len(data) || file.SHA256 != fmt.Sprintf("%x", digest) {
 		t.Fatalf("source record does not bind the published fixture: %#v", source)
 	}
 }

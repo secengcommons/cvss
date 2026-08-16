@@ -1,12 +1,34 @@
 {
   "owner": "Forum of Incident Response and Security Teams, Inc.",
   "licence": "CVSS is used with permission from FIRST",
-  "terms": "https://www.first.org/cvss/v3.1/specification-document#CVSS-License",
-  "source": "https://www.first.org/cvss/v3.1/examples",
+  "terms": "https://www.first.org/cvss/v4.0/specification-document#CVSS-License",
+  "cvss_31_source": "https://www.first.org/cvss/v3.1/examples",
+  "cvss_40_source": "https://www.first.org/cvss/v4.0/examples",
+  "cvss_40_document_version": "1.8",
   "transformation": "selected published Base vector, score and severity values encoded as JSON",
-  "file": {
-    "path": "v31-base.json",
-    "sha256": "279b7b3ad77170d7fc9662e0ff01980914f0256b06bc0a8c790ae2039b1117cc",
-    "length": 559
-  }
+  "cvss_40_qualification": {
+    "repository": "https://github.com/FIRSTdotorg/cvss-resources",
+    "commit": "48f85d84a036de9c610668f9496c12b5040a9ae3",
+    "path": "vectorFiles/reference-scores",
+    "sha256": "3b60f12899249bf8b48e01ff0aba451f052a836b22c6a3ffd880b7a5cc2fea4f",
+    "length": 11648072,
+    "transformation": "retained every record ending in E:A, removed that default threat suffix, uppercased severity labels and encoded the result as compact JSON"
+  },
+  "files": [
+    {
+      "path": "v31-base.json",
+      "sha256": "279b7b3ad77170d7fc9662e0ff01980914f0256b06bc0a8c790ae2039b1117cc",
+      "length": 559
+    },
+    {
+      "path": "v40-base.json",
+      "sha256": "459167f12107242e9c11a6bd16f6ca6aa54be41c06c1ca1dd9dcce066e95a2be",
+      "length": 898
+    },
+    {
+      "path": "v40-reference-base.json",
+      "sha256": "69ea049ece43b61e7d93d95ee8786cef945dfb12b9c9e8e301730a8d0004e538",
+      "length": 446772
+    }
+  ]
 }
