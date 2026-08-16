@@ -343,6 +343,8 @@ func (vector Vector) Score() (Score, error) {
 }
 
 func roundedTenths(value float64) int {
+	// epsilon preserves decimal half-up boundaries affected by binary floating-point error
+	// Its value is qualified by the retained Red Hat calculator correction set
 	const epsilon = 1e-6
 	return min(100, max(0, int(math.Round((value+epsilon)*10))))
 }

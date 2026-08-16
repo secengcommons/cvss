@@ -49,8 +49,8 @@ type fixtureSource struct {
 		DecodedLength                                    int    `json:"decoded_length"`
 	} `json:"cvss_40_complete_qualification"`
 	RoundingQualification struct {
-		Repository, Commit, Path, SHA256, Transformation string
-		Length, Records, Occurrences                     int
+		Repository, Commit, Path, SHA256, Generator, Transformation string
+		Length, Records, Occurrences                                int
 	} `json:"cvss_40_rounding_qualification"`
 	MacroQualification struct {
 		Repository, Commit, Transformation string
@@ -164,7 +164,8 @@ func validRoundingQualification(source fixtureSource) bool {
 	rounding := source.RoundingQualification
 	return rounding.Repository == "https://github.com/RedHatProductSecurity/cvss-v4-calculator" && rounding.Commit == "d1eafe06859e6610600f772ed98502bc1cd63526" &&
 		rounding.Path == "cvss40.js" && rounding.SHA256 == "6625cc93aae9f01bc9990e4b36f4b133995b32072da90bb7be369d93db9173aa" &&
-		rounding.Length == 44895 && rounding.Records == 157 && rounding.Occurrences == 159 && rounding.Transformation != ""
+		rounding.Length == 44895 && rounding.Records == 157 && rounding.Occurrences == 159 &&
+		rounding.Generator == "differential/cmd/cvss40-corrections" && rounding.Transformation != ""
 }
 
 func TestPublishedBaseVectors(t *testing.T) {

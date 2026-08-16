@@ -54,7 +54,8 @@
     "length": 44895,
     "records": 157,
     "occurrences": 159,
-    "transformation": "ran every valid retained reference vector through the pinned official calculator, retained each unique vector whose score changed under the current half-up rounding correction and verified duplicate vectors produced identical corrections"
+    "generator": "differential/cmd/cvss40-corrections",
+    "transformation": "ran every valid retained reference vector through the pinned Red Hat calculator revision, retained each unique vector whose score changed under the current half-up rounding correction and verified duplicate vectors produced identical corrections"
   },
   "cvss_40_macro_qualification": {
     "repository": "https://github.com/FIRSTdotorg/cvss-resources",

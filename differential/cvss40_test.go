@@ -26,7 +26,7 @@ type roundingCorrection40 struct {
 }
 
 type qualificationCounts40 struct {
-	valid, rawPandatix, correctedPandatix, nonRoundingPandatix, severityPandatix int
+	valid, rawPandatix, correctedPandatix, nonRoundingPandatix, severityPandatix, correctedSeverityPandatix int
 }
 
 func TestCVSS40ReferenceDifferential(t *testing.T) {
@@ -42,14 +42,16 @@ func TestCVSS40ReferenceDifferential(t *testing.T) {
 		counts.correctedPandatix += observed.correctedPandatix
 		counts.nonRoundingPandatix += observed.nonRoundingPandatix
 		counts.severityPandatix += observed.severityPandatix
+		counts.correctedSeverityPandatix += observed.correctedSeverityPandatix
 	}
 
 	expected := qualificationCounts40{
-		valid:               41270,
-		rawPandatix:         99,
-		correctedPandatix:   184,
-		nonRoundingPandatix: 62,
-		severityPandatix:    38,
+		valid:                     41270,
+		rawPandatix:               99,
+		correctedPandatix:         184,
+		nonRoundingPandatix:       62,
+		severityPandatix:          38,
+		correctedSeverityPandatix: 0,
 	}
 	if counts != expected {
 		t.Fatalf("qualification counts = %#v", counts)
@@ -82,11 +84,12 @@ func qualifyReference40(tb testing.TB, reference referenceVector40, corrections 
 	rawMismatch := pandatixScore != reference.Score
 	correctedMismatch := pandatixScore != expected
 	return qualificationCounts40{
-		valid:               1,
-		rawPandatix:         count(rawMismatch),
-		correctedPandatix:   count(correctedMismatch),
-		nonRoundingPandatix: count(rawMismatch && !corrected),
-		severityPandatix:    count(correctedMismatch && severity40(pandatixScore) != severity40(expected)),
+		valid:                     1,
+		rawPandatix:               count(rawMismatch),
+		correctedPandatix:         count(correctedMismatch),
+		nonRoundingPandatix:       count(rawMismatch && !corrected),
+		severityPandatix:          count(correctedMismatch && severity40(pandatixScore) != severity40(expected)),
+		correctedSeverityPandatix: count(corrected && correctedMismatch && severity40(pandatixScore) != severity40(expected)),
 	}
 }
 

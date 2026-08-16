@@ -141,9 +141,14 @@ Implementation | Raw FIRST scores | Corrected scores | Corrected severity disagr
 CTI Commons | 41,111 matches before applying the retained corrections | 41,270 matches | 0
 Pandatix v0.6.2 | 41,171 matches | 41,086 matches | 38
 
-Pandatix differs from 99 raw corpus scores. Sixty-two of those differences occur outside the vectors affected by the later rounding correction, so the discrepancy is not solely the known decimal-boundary issue. Against the corrected expectations it differs on 184 corpus occurrences
+Pandatix differs from 99 raw corpus scores. Sixty-two raw-score mismatches occur on corpus entries outside the retained rounding-correction set, so the discrepancy is not solely the known decimal-boundary issue. Against the corrected expectations it differs on 184 corpus occurrences. All 38 severity disagreements occur outside the retained correction set
 
 The correction set and calculator source are digest-pinned in [`testdata/first/source.json`](testdata/first/source.json). [`TestCVSS40ReferenceDifferential`](differential/cvss40_test.go) reproduces the comparison. These counts qualify the retained corpus and Pandatix v0.6.2; they are not proof over every possible CVSS 4.0 vector
+
+The retained correction set can be regenerated from the pinned calculator source with:
+```sh
+go -C differential run ./cmd/cvss40-corrections -calculator <path-to-cvss40.js> > v40-rounding-corrections.generated.json
+```
 
 ### Benchmark method
 
