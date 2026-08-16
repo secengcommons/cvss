@@ -211,7 +211,7 @@ Base scoring is also not a like-for-like calculation. CTI Commons indexes a pack
 
 Environmental scoring is where Pandatix's directly addressable packed fields win. CTI Commons decodes a smaller mixed-radix state before applying the formula. Replacing that design with duplicated formulas, large lookup tables or scattered bit masks would improve this microbenchmark at the cost of memory or maintainability
 
-In-memory vector sizes:
+**In-memory vector sizes:**
 
 Version | CTI Commons | Pandatix
 --- | ---: | ---:
