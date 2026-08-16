@@ -14,6 +14,45 @@
     "length": 11648072,
     "transformation": "retained every record ending in E:A, removed that default threat suffix, uppercased severity labels and encoded the result as compact JSON"
   },
+  "cvss_40_complete_qualification": {
+    "repository": "https://github.com/FIRSTdotorg/cvss-resources",
+    "commit": "48f85d84a036de9c610668f9496c12b5040a9ae3",
+    "path": "vectorFiles/reference-scores",
+    "sha256": "3b60f12899249bf8b48e01ff0aba451f052a836b22c6a3ffd880b7a5cc2fea4f",
+    "length": 11648072,
+    "records": 66298,
+    "valid": 41270,
+    "invalid": 25028,
+    "bare_invalid": 33,
+    "decoded_sha256": "0bcc7bb6227d75d24dd1dc89db1c903649e4b951837e573abf290d255d9523bd",
+    "decoded_length": 9911450,
+    "transformation": "discarded 33 source lines which contain no vector, parsed the remaining Python literals, represented error records as invalid vectors without implementation-specific error text, uppercased valid severity labels, encoded compact JSON and gzip-compressed it with an empty filename and zero timestamp"
+  },
+  "cvss_40_rounding_qualification": {
+    "repository": "https://github.com/RedHatProductSecurity/cvss-v4-calculator",
+    "commit": "d1eafe06859e6610600f772ed98502bc1cd63526",
+    "path": "cvss40.js",
+    "sha256": "6625cc93aae9f01bc9990e4b36f4b133995b32072da90bb7be369d93db9173aa",
+    "length": 44895,
+    "records": 157,
+    "occurrences": 159,
+    "transformation": "ran every valid retained reference vector through the pinned official calculator, retained each unique vector whose score changed under the current half-up rounding correction and verified duplicate vectors produced identical corrections"
+  },
+  "cvss_40_macro_qualification": {
+    "repository": "https://github.com/FIRSTdotorg/cvss-resources",
+    "commit": "48f85d84a036de9c610668f9496c12b5040a9ae3",
+    "vectors": {
+      "path": "vectorFiles/macro-vectors",
+      "sha256": "f653914506e697a94a18b690c051144b295626c534737fb79c589a61c1e0e8a3",
+      "length": 23490
+    },
+    "scores": {
+      "path": "vectorFiles/macro-scores",
+      "sha256": "b55926940d4fbb073a0d30a98d6983de93f4542209eee936a671713387f92213",
+      "length": 36677
+    },
+    "transformation": "paired the 270 vector and score records by exact vector identity, uppercased severity labels and encoded the result as compact JSON"
+  },
   "files": [
     {
       "path": "v31-base.json",
@@ -29,6 +68,21 @@
       "path": "v40-reference-base.json",
       "sha256": "69ea049ece43b61e7d93d95ee8786cef945dfb12b9c9e8e301730a8d0004e538",
       "length": 446772
+    },
+    {
+      "path": "v40-reference-complete.json.gz",
+      "sha256": "db7355c4074dd6e962e4f9a200e26a8c1026083ffc41eebd9ec768f96729957c",
+      "length": 791054
+    },
+    {
+      "path": "v40-rounding-corrections.json",
+      "sha256": "bf44b93801b29ab04755fba3bfc0356eb474f139cbef9fda014219419ef6ff3a",
+      "length": 23245
+    },
+    {
+      "path": "v40-macro.json",
+      "sha256": "d898f884d677238a72dbcbf298bae7ed73cbd383ffbf889ff24884aefdc79cf5",
+      "length": 35329
     }
   ]
 }

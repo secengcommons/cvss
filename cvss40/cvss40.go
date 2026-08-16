@@ -3,6 +3,7 @@ package cvss40
 import (
 	"errors"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -10,18 +11,25 @@ import (
 const maxVectorBytes = 256
 
 var (
-	ErrInvalidVector = errors.New("invalid CVSS 4.0 Base vector")
+	ErrInvalidVector = errors.New("invalid CVSS 4.0 vector")
 	ErrNonBaseVector = errors.New("CVSS 4.0 vector contains non-Base metrics")
 )
 
 var metricNames = [...]string{"AV", "AC", "AT", "PR", "UI", "VC", "VI", "VA", "SC", "SI", "SA"}
 var metricValues = [...]string{"NALP", "LH", "NP", "NLH", "NPA", "HLN", "HLN", "HLN", "HLN", "HLN", "HLN"}
 
-var nonBaseMetrics = map[string]bool{
-	"E": true, "CR": true, "IR": true, "AR": true, "MAV": true, "MAC": true,
-	"MAT": true, "MPR": true, "MUI": true, "MVC": true, "MVI": true,
-	"MVA": true, "MSC": true, "MSI": true, "MSA": true, "S": true,
-	"AU": true, "R": true, "V": true, "RE": true, "U": true,
+var optionalNames = [...]string{
+	"E", "CR", "IR", "AR", "MAV", "MAC", "MAT", "MPR", "MUI", "MVC", "MVI", "MVA", "MSC", "MSI", "MSA",
+	"S", "AU", "R", "V", "RE", "U",
+}
+
+var optionalValues = [...][]string{
+	{"X", "A", "P", "U"}, {"X", "H", "M", "L"}, {"X", "H", "M", "L"}, {"X", "H", "M", "L"},
+	{"X", "N", "A", "L", "P"}, {"X", "L", "H"}, {"X", "N", "P"}, {"X", "N", "L", "H"},
+	{"X", "N", "P", "A"}, {"X", "N", "L", "H"}, {"X", "N", "L", "H"}, {"X", "N", "L", "H"},
+	{"X", "N", "L", "H"}, {"X", "N", "L", "H", "S"}, {"X", "N", "L", "H", "S"},
+	{"X", "N", "P"}, {"X", "N", "Y"}, {"X", "A", "U", "I"}, {"X", "D", "C"}, {"X", "L", "M", "H"},
+	{"X", "Clear", "Green", "Amber", "Red"},
 }
 
 type Metric struct {
@@ -30,8 +38,9 @@ type Metric struct {
 }
 
 type Vector struct {
-	values [11]byte
-	valid  bool
+	values   [11]byte
+	optional [21]string
+	valid    bool
 }
 
 type Score struct {
@@ -48,7 +57,7 @@ func ParseBase(text string) (Vector, error) {
 	}
 	for _, part := range parts[1:] {
 		name, _, found := strings.Cut(part, ":")
-		if found && nonBaseMetrics[name] {
+		if found && optionalIndex(name) >= 0 {
 			return Vector{}, ErrNonBaseVector
 		}
 	}
@@ -67,6 +76,53 @@ func ParseBase(text string) (Vector, error) {
 	return vector, nil
 }
 
+func Parse(text string) (Vector, error) {
+	if !validText(text) {
+		return Vector{}, ErrInvalidVector
+	}
+	parts := strings.Split(text, "/")
+	if len(parts) < len(metricNames)+1 || parts[0] != "CVSS:4.0" {
+		return Vector{}, ErrInvalidVector
+	}
+	vector, ok := parseRequired(parts[1 : len(metricNames)+1])
+	if !ok || !parseOptional(&vector, parts[len(metricNames)+1:]) {
+		return Vector{}, ErrInvalidVector
+	}
+	vector.valid = true
+	return vector, nil
+}
+
+func parseRequired(parts []string) (Vector, bool) {
+	var vector Vector
+	for index, name := range metricNames {
+		metric, value, found := strings.Cut(parts[index], ":")
+		if !found || metric != name || len(value) != 1 || !strings.ContainsRune(metricValues[index], rune(value[0])) {
+			return Vector{}, false
+		}
+		vector.values[index] = value[0]
+	}
+	return vector, true
+}
+
+func parseOptional(vector *Vector, parts []string) bool {
+	next := 0
+	for _, part := range parts {
+		name, value, found := strings.Cut(part, ":")
+		if !found {
+			return false
+		}
+		index := optionalIndex(name)
+		if index < next || index < 0 || !allowedOptional(index, value) {
+			return false
+		}
+		if value != "X" {
+			vector.optional[index] = value
+		}
+		next = index + 1
+	}
+	return true
+}
+
 func (vector Vector) String() string {
 	if !vector.valid {
 		return ""
@@ -79,6 +135,15 @@ func (vector Vector) String() string {
 		text.WriteString(name)
 		text.WriteByte(':')
 		text.WriteByte(vector.values[index])
+	}
+	for index, value := range vector.optional {
+		if value == "" || value == "X" {
+			continue
+		}
+		text.WriteByte('/')
+		text.WriteString(optionalNames[index])
+		text.WriteByte(':')
+		text.WriteString(value)
 	}
 	return text.String()
 }
@@ -94,6 +159,43 @@ func (vector Vector) Metrics() [11]Metric {
 	return metrics
 }
 
+func (vector Vector) OptionalMetrics() []Metric {
+	if !vector.valid {
+		return nil
+	}
+	metrics := make([]Metric, 0, len(vector.optional))
+	for index, value := range vector.optional {
+		if value != "" && value != "X" {
+			metrics = append(metrics, Metric{Name: optionalNames[index], Value: value})
+		}
+	}
+	if len(metrics) == 0 {
+		return nil
+	}
+	return metrics
+}
+
+func (vector Vector) Nomenclature() string {
+	if !vector.valid {
+		return ""
+	}
+	threat := defined(vector.optional[0])
+	environmental := false
+	for _, value := range vector.optional[1:15] {
+		environmental = environmental || defined(value)
+	}
+	switch {
+	case threat && environmental:
+		return "CVSS-BTE"
+	case threat:
+		return "CVSS-BT"
+	case environmental:
+		return "CVSS-BE"
+	default:
+		return "CVSS-B"
+	}
+}
+
 func (vector Vector) Valid() bool {
 	return vector.valid
 }
@@ -102,13 +204,14 @@ func (vector Vector) Score() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
 	}
-	if noImpact(vector.values) {
+	effective := vector.effective()
+	if noImpact(effective.metrics) {
 		return Score{}, nil
 	}
-	eq := equivalence(vector.values)
+	eq := equivalence(effective)
 	current := macroScore(eq)
 	lower := lowerScores(eq, current)
-	distance := severityDistances(vector.values, eq)
+	distance := severityDistances(effective, eq)
 	reduction := 0.0
 	for index, scoreDifference := range lower.differences {
 		reduction += scoreDifference * distance[index]
@@ -116,7 +219,36 @@ func (vector Vector) Score() (Score, error) {
 	if lower.count > 0 {
 		reduction /= float64(lower.count)
 	}
-	return Score{tenths: int(math.Round((float64(current)/10 - reduction) * 10))}, nil
+	return Score{tenths: roundedTenths(float64(current)/10 - reduction)}, nil
+}
+
+func roundedTenths(value float64) int {
+	const epsilon = 1e-6
+	return min(100, max(0, int(math.Round((value+epsilon)*10))))
+}
+
+type scoringValues struct {
+	metrics      [11]byte
+	exploitation byte
+	requirements [3]byte
+}
+
+func (vector Vector) effective() scoringValues {
+	values := scoringValues{metrics: vector.values, exploitation: 'A', requirements: [3]byte{'H', 'H', 'H'}}
+	if defined(vector.optional[0]) {
+		values.exploitation = vector.optional[0][0]
+	}
+	for index := range 3 {
+		if defined(vector.optional[index+1]) {
+			values.requirements[index] = vector.optional[index+1][0]
+		}
+	}
+	for index := range 11 {
+		if defined(vector.optional[index+4]) {
+			values.metrics[index] = vector.optional[index+4][0]
+		}
+	}
+	return values
 }
 
 func (score Score) Tenths() int { return score.tenths }
@@ -154,6 +286,21 @@ func validText(text string) bool {
 	return true
 }
 
+func optionalIndex(name string) int {
+	for index, candidate := range optionalNames {
+		if name == candidate {
+			return index
+		}
+	}
+	return -1
+}
+
+func allowedOptional(index int, value string) bool {
+	return slices.Contains(optionalValues[index], value)
+}
+
+func defined(value string) bool { return value != "" && value != "X" }
+
 func noImpact(values [11]byte) bool {
 	for _, value := range values[5:] {
 		if value != 'N' {
@@ -165,8 +312,15 @@ func noImpact(values [11]byte) bool {
 
 type macroVector [6]int
 
-func equivalence(values [11]byte) macroVector {
-	return macroVector{equivalence1(values), equivalence2(values), equivalence3(values), equivalence4(values), 0, equivalence6(values)}
+func equivalence(values scoringValues) macroVector {
+	return macroVector{
+		equivalence1(values.metrics),
+		equivalence2(values.metrics),
+		equivalence3(values.metrics),
+		equivalence4(values.metrics),
+		equivalence5(values.exploitation),
+		equivalence6(values.metrics, values.requirements),
+	}
 }
 
 func equivalence1(values [11]byte) int {
@@ -199,18 +353,32 @@ func equivalence3(values [11]byte) int {
 
 func equivalence4(values [11]byte) int {
 	eq4 := 2
-	if values[8] == 'H' || values[9] == 'H' || values[10] == 'H' {
+	if values[9] == 'S' || values[10] == 'S' {
+		eq4 = 0
+	} else if values[8] == 'H' || values[9] == 'H' || values[10] == 'H' {
 		eq4 = 1
 	}
 	return eq4
 }
 
-func equivalence6(values [11]byte) int {
-	eq6 := 1
-	if values[5] == 'H' || values[6] == 'H' || values[7] == 'H' {
-		eq6 = 0
+func equivalence5(value byte) int {
+	switch value {
+	case 'A':
+		return 0
+	case 'P':
+		return 1
+	default:
+		return 2
 	}
-	return eq6
+}
+
+func equivalence6(values [11]byte, requirements [3]byte) int {
+	for index := range 3 {
+		if values[index+5] == 'H' && requirements[index] == 'H' {
+			return 0
+		}
+	}
+	return 1
 }
 
 func macroScore(eq macroVector) int {
@@ -257,8 +425,14 @@ func nextCombined(eq macroVector) (macroVector, bool) {
 			return right, true
 		}
 		return left, true
+	case eq[2] == 0 && eq[5] == 1:
+		next[2]++
+		return next, true
 	case eq[2] == 1 && eq[5] == 0:
 		next[5]++
+		return next, true
+	case eq[2] == 1 && eq[5] == 1:
+		next[2]++
 		return next, true
 	default:
 		return macroVector{}, false

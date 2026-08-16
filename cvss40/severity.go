@@ -12,9 +12,9 @@ var highestEQ2 = [][][]int{
 }
 
 var highestEQ4 = [][][]int{
-	{{0, -1, -1}},
 	{{0, 0, 0}},
-	{{1, 1, 1}},
+	{{0, 1, 1}},
+	{{1, 2, 2}},
 }
 
 var highestEQ3EQ6 = [][][][]int{
@@ -32,17 +32,15 @@ var highestEQ3EQ6 = [][][][]int{
 	},
 }
 
-func severityDistances(values [11]byte, eq macroVector) [5]float64 {
-	const step = 0.1
+func severityDistances(values scoringValues, eq macroVector) [5]float64 {
 	actual := []int{
-		rank(values[0], "NALP"), rank(values[1], "LH"), rank(values[2], "NP"),
-		rank(values[3], "NLH"), rank(values[4], "NPA"),
-		rank(values[5], "HLN"), rank(values[6], "HLN"), rank(values[7], "HLN"),
-		rank(values[8], "HLN"), rank(values[9], "HLN"), rank(values[10], "HLN"),
-		0, 0, 0,
+		rank(values.metrics[0], "NALP"), rank(values.metrics[1], "LH"), rank(values.metrics[2], "NP"),
+		rank(values.metrics[3], "NLH"), rank(values.metrics[4], "NPA"),
+		rank(values.metrics[5], "HLN"), rank(values.metrics[6], "HLN"), rank(values.metrics[7], "HLN"),
+		rank(values.metrics[8], "HLN"), rank(values.metrics[9], "SHLN"), rank(values.metrics[10], "SHLN"),
+		rank(values.requirements[0], "HML"), rank(values.requirements[1], "HML"), rank(values.requirements[2], "HML"),
 	}
 	var distances [5]float64
-	found := false
 	for _, eq1 := range highestEQ1[eq[0]] {
 		for _, eq2 := range highestEQ2[eq[1]] {
 			for _, combined := range highestEQ3EQ6[eq[2]][eq[5]] {
@@ -51,19 +49,25 @@ func severityDistances(values [11]byte, eq macroVector) [5]float64 {
 					if !dominates(actual, candidate) {
 						continue
 					}
-					distances[0] = float64(actual[0]-candidate[0]+actual[3]-candidate[3]+actual[4]-candidate[4]) * step / (float64(depth(0, eq)+1) * step)
-					distances[1] = float64(actual[1]-candidate[1]+actual[2]-candidate[2]) * step / (float64(depth(1, eq)+1) * step)
-					distances[2] = float64(actual[5]-candidate[5]+actual[6]-candidate[6]+actual[7]-candidate[7]+actual[11]-candidate[11]+actual[12]-candidate[12]+actual[13]-candidate[13]) * step / (float64(depth(2, eq)+1) * step)
-					distances[3] = float64(actual[8]-candidate[8]+actual[9]-candidate[9]+actual[10]-candidate[10]) * step / (float64(depth(3, eq)+1) * step)
-					found = true
+					distances[0] = severityProportion(actual, candidate, depth(0, eq), 0, 3, 4)
+					distances[1] = severityProportion(actual, candidate, depth(1, eq), 1, 2)
+					distances[2] = severityProportion(actual, candidate, depth(2, eq), 5, 6, 7, 11, 12, 13)
+					distances[3] = severityProportion(actual, candidate, depth(3, eq), 8, 9, 10)
+					return distances
 				}
 			}
 		}
 	}
-	if !found {
-		panic("CVSS 4.0 Base vector has no highest-severity vector")
+	panic("CVSS 4.0 vector has no highest-severity vector")
+}
+
+func severityProportion(actual, candidate []int, groupDepth int, indices ...int) float64 {
+	const step = 0.1
+	distance := 0.0
+	for _, index := range indices {
+		distance += float64(actual[index]-candidate[index]) * step
 	}
-	return distances
+	return distance / (float64(groupDepth+1) * step)
 }
 
 func rank(value byte, order string) int {
