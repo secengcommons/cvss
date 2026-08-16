@@ -32,7 +32,7 @@ const (
 
 var (
 	ErrInvalidVector = errors.New("invalid CVSS 4.0 vector")
-	// ErrNonBaseVector reports optional metrics passed to ParseBase
+	// Returned when ParseBase receives optional metrics
 	ErrNonBaseVector = errors.New("CVSS 4.0 vector contains non-Base metrics")
 )
 
@@ -54,14 +54,11 @@ var optionalValues = [...][]string{
 }
 var metricStrings = [26]string{0: "A", 7: "H", 11: "L", 13: "N", 15: "P"}
 
-// Metric is one canonical CVSS 4.0 metric name and value
 type Metric struct {
 	Name  string
 	Value string
 }
 
-// Vector is a validated CVSS 4.0 vector value
-//
 // The zero value is invalid
 type Vector struct {
 	values   [11]byte
@@ -69,12 +66,12 @@ type Vector struct {
 	valid    bool
 }
 
-// Score is a CVSS 4.0 score stored in exact tenths
+// Stored in exact tenths
 type Score struct {
 	tenths int
 }
 
-// ParseBase parses a Base-only vector in mandatory metric order
+// Requires mandatory metric order
 func ParseBase(text string) (Vector, error) {
 	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
@@ -98,7 +95,7 @@ func ParseBase(text string) (Vector, error) {
 	return vector, nil
 }
 
-// Parse parses a complete vector in mandatory metric order
+// Requires mandatory metric order
 func Parse(text string) (Vector, error) {
 	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
@@ -170,7 +167,7 @@ func nextPart(text string, start int) (string, int, bool) {
 	return text[start:], len(text), true
 }
 
-// String returns the canonical vector or an empty string for an invalid vector
+// Invalid vectors produce an empty string
 func (vector Vector) String() string {
 	if !vector.valid {
 		return ""
@@ -209,7 +206,7 @@ func (vector Vector) textLength() int {
 	return length
 }
 
-// AppendText appends the canonical vector to text
+// Output is canonical
 func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.valid {
 		return text, ErrInvalidVector
@@ -217,10 +214,10 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	return vector.appendText(text), nil
 }
 
-// MarshalText returns the canonical vector
+// Output is canonical
 func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(nil) }
 
-// MarshalJSON returns the canonical vector as a JSON string
+// Output is a canonical JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
 	if !vector.valid {
 		return nil, ErrInvalidVector
@@ -250,7 +247,7 @@ func (vector Vector) appendText(text []byte) []byte {
 	return text
 }
 
-// Metrics returns the eleven Base metrics in mandatory order
+// Mandatory order
 func (vector Vector) Metrics() [11]Metric {
 	var metrics [11]Metric
 	if !vector.valid {
@@ -262,7 +259,7 @@ func (vector Vector) Metrics() [11]Metric {
 	return metrics
 }
 
-// OptionalMetrics returns defined optional metrics in mandatory order
+// Defined metrics in mandatory order
 func (vector Vector) OptionalMetrics() []Metric {
 	if !vector.valid {
 		return nil
@@ -279,7 +276,7 @@ func (vector Vector) OptionalMetrics() []Metric {
 	return vector.appendOptionalMetrics(make([]Metric, 0, count))
 }
 
-// AppendOptionalMetrics appends defined optional metrics in mandatory order
+// Appended in mandatory order
 func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
 	if !vector.valid {
 		return metrics, ErrInvalidVector
@@ -317,7 +314,7 @@ func (vector Vector) Nomenclature() string {
 	}
 }
 
-// Valid reports whether the vector was constructed by a validated operation
+// True only for vectors produced by validated operations
 func (vector Vector) Valid() bool {
 	return vector.valid
 }
@@ -379,7 +376,7 @@ func (score Score) Tenths() int { return score.tenths }
 
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
-// AppendText appends the score with one decimal place
+// One decimal place
 func (score Score) AppendText(text []byte) []byte {
 	if score.tenths == 100 {
 		return append(text, "10.0"...)
@@ -387,10 +384,10 @@ func (score Score) AppendText(text []byte) []byte {
 	return append(text, "0123456789"[score.tenths/10], '.', "0123456789"[score.tenths%10])
 }
 
-// String returns the score with one decimal place
+// One decimal place
 func (score Score) String() string { return string(score.AppendText(make([]byte, 0, 4))) }
 
-// Severity returns the specification severity rating in uppercase
+// Specification rating in uppercase
 func (score Score) Severity() string {
 	switch {
 	case score.tenths == 0:

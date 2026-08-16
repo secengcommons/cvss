@@ -2,7 +2,7 @@ package cvss20
 
 import "encoding/json"
 
-// Metric returns a defined metric by name and reports false for absent or unknown metrics
+// False for absent or unknown metrics
 func (vector Vector) Metric(name string) (Metric, bool) {
 	if !vector.valid {
 		return Metric{}, false
@@ -16,7 +16,7 @@ func (vector Vector) Metric(name string) (Metric, bool) {
 	return Metric{}, false
 }
 
-// WithMetric returns a validated vector with one metric replaced without changing the receiver
+// The receiver is unchanged
 func (vector Vector) WithMetric(metric Metric) (Vector, error) {
 	if !vector.valid {
 		return Vector{}, ErrInvalidVector
@@ -38,7 +38,7 @@ func (vector Vector) WithMetric(metric Metric) (Vector, error) {
 	return vector, nil
 }
 
-// Impact returns the unrounded Base impact subscore
+// Unrounded Base subscore
 func (vector Vector) Impact() (float64, error) {
 	if !vector.valid {
 		return 0, ErrInvalidVector
@@ -46,7 +46,7 @@ func (vector Vector) Impact() (float64, error) {
 	return impact(vector.values), nil
 }
 
-// Exploitability returns the unrounded Base exploitability subscore
+// Unrounded Base subscore
 func (vector Vector) Exploitability() (float64, error) {
 	if !vector.valid {
 		return 0, ErrInvalidVector
@@ -54,7 +54,7 @@ func (vector Vector) Exploitability() (float64, error) {
 	return 20 * accessWeight(vector.values[attackVectorIndex]) * complexityWeight(vector.values[attackComplexityIndex]) * authenticationWeight(vector.values[authenticationIndex]), nil
 }
 
-// UnmarshalText replaces the receiver only after complete vector validation
+// Receiver replacement is transactional
 func (vector *Vector) UnmarshalText(text []byte) error {
 	if vector == nil || len(text) == 0 || len(text) > maxVectorBytes {
 		return ErrInvalidVector
@@ -62,7 +62,7 @@ func (vector *Vector) UnmarshalText(text []byte) error {
 	return unmarshal(vector, string(text))
 }
 
-// UnmarshalJSON replaces the receiver only after complete JSON string and vector validation
+// Receiver replacement is transactional
 func (vector *Vector) UnmarshalJSON(data []byte) error {
 	if vector == nil || len(data) == 0 || len(data) > maxJSONVectorBytes {
 		return ErrInvalidVector

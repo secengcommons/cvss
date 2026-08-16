@@ -1,6 +1,6 @@
 package cvss40
 
-// macroScores contains the 270 equivalence-class scores defined by CVSS 4.0
+// 270 CVSS 4.0 equivalence-class scores
 // Indices encode EQ1 through EQ6; values are tenths
 var macroScores = [324]int{
 	0:   100,

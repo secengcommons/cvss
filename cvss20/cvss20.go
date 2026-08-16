@@ -1,4 +1,3 @@
-// Package cvss20 parses and scores CVSS 2.0 vectors
 package cvss20
 
 import (
@@ -27,7 +26,7 @@ const (
 
 var (
 	ErrInvalidVector = errors.New("invalid CVSS 2.0 vector")
-	// ErrNonBaseVector reports optional metrics passed to ParseBase
+	// Returned when ParseBase receives optional metrics
 	ErrNonBaseVector = errors.New("CVSS 2.0 vector contains non-Base metrics")
 )
 
@@ -37,14 +36,11 @@ var optionalNames = [...]string{"E", "RL", "RC", "CDP", "TD", "CR", "IR", "AR"}
 var optionalValues = [...][]string{{"U", "POC", "F", "H", "ND"}, {"OF", "TF", "W", "U", "ND"}, {"UC", "UR", "C", "ND"}, {"N", "L", "LM", "MH", "H", "ND"}, {"N", "L", "M", "H", "ND"}, {"L", "M", "H", "ND"}, {"L", "M", "H", "ND"}, {"L", "M", "H", "ND"}}
 var metricStrings = [26]string{0: "A", 2: "C", 7: "H", 11: "L", 12: "M", 13: "N", 15: "P", 18: "S"}
 
-// Metric is one canonical CVSS 2.0 metric name and value
 type Metric struct {
 	Name  string
 	Value string
 }
 
-// Vector is a validated CVSS 2.0 vector value
-//
 // The zero value is invalid
 type Vector struct {
 	values     [6]byte
@@ -53,12 +49,12 @@ type Vector struct {
 	valid      bool
 }
 
-// Score is a CVSS 2.0 score stored in exact tenths
+// Stored in exact tenths
 type Score struct {
 	tenths int
 }
 
-// ParseBase parses a Base-only vector in specification metric order
+// Requires specification metric order
 func ParseBase(text string) (Vector, error) {
 	vector, err := parse(text, false)
 	if err != nil {
@@ -67,7 +63,7 @@ func ParseBase(text string) (Vector, error) {
 	return vector, nil
 }
 
-// Parse parses a complete vector in specification metric order
+// Requires specification metric order
 func Parse(text string) (Vector, error) { return parse(text, true) }
 
 func parse(text string, complete bool) (Vector, error) {
@@ -164,7 +160,7 @@ func allowedByte(value byte, values []string) bool {
 	return false
 }
 
-// String returns the canonical vector or an empty string for an invalid vector
+// Invalid vectors produce an empty string
 func (vector Vector) String() string {
 	if !vector.valid {
 		return ""
@@ -197,7 +193,7 @@ func (vector Vector) textLength() int {
 	return length
 }
 
-// AppendText appends the canonical vector to text
+// Output is canonical
 func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.valid {
 		return text, ErrInvalidVector
@@ -205,10 +201,10 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	return vector.appendText(text), nil
 }
 
-// MarshalText returns the canonical vector
+// Output is canonical
 func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(nil) }
 
-// MarshalJSON returns the canonical vector as a JSON string
+// Output is a canonical JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
 	if !vector.valid {
 		return nil, ErrInvalidVector
@@ -258,7 +254,7 @@ func writeMetrics(text *strings.Builder, values [8]byte) {
 	}
 }
 
-// Metrics returns the six Base metrics in specification order
+// Specification order
 func (vector Vector) Metrics() [6]Metric {
 	var metrics [6]Metric
 	if !vector.valid {
@@ -270,7 +266,7 @@ func (vector Vector) Metrics() [6]Metric {
 	return metrics
 }
 
-// OptionalMetrics returns defined optional metrics in specification order
+// Defined metrics in specification order
 func (vector Vector) OptionalMetrics() []Metric {
 	if !vector.valid {
 		return nil
@@ -287,7 +283,7 @@ func (vector Vector) OptionalMetrics() []Metric {
 	return vector.appendOptionalMetrics(make([]Metric, 0, count))
 }
 
-// AppendOptionalMetrics appends defined optional metrics in specification order
+// Appended in specification order
 func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
 	if !vector.valid {
 		return metrics, ErrInvalidVector
@@ -304,7 +300,7 @@ func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
 	return metrics
 }
 
-// Valid reports whether the vector was constructed by a validated operation
+// True only for vectors produced by validated operations
 func (vector Vector) Valid() bool { return vector.valid }
 
 func (vector Vector) BaseScore() (Score, error) {
@@ -332,7 +328,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 	return Score{tenths: round(value)}, nil
 }
 
-// Score returns the highest score group containing a defined metric
+// Uses the highest score group containing a defined metric
 func (vector Vector) Score() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -505,7 +501,7 @@ func (score Score) Tenths() int { return score.tenths }
 
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
-// AppendText appends the score with one decimal place
+// One decimal place
 func (score Score) AppendText(text []byte) []byte {
 	if score.tenths == 100 {
 		return append(text, "10.0"...)
@@ -513,7 +509,7 @@ func (score Score) AppendText(text []byte) []byte {
 	return append(text, "0123456789"[score.tenths/10], '.', "0123456789"[score.tenths%10])
 }
 
-// String returns the score with one decimal place
+// One decimal place
 func (score Score) String() string { return string(score.AppendText(make([]byte, 0, 4))) }
 
 func round(value float64) int { return int(value*10 + .5) }

@@ -1,4 +1,3 @@
-// Package cvss identifies supported Common Vulnerability Scoring System vectors
 package cvss
 
 import (
@@ -28,7 +27,7 @@ const (
 
 func (version Version) String() string { return string(version) }
 
-// VersionOf validates vector then returns its supported specification version
+// The vector is fully validated before its version is returned
 func VersionOf(vector string) (Version, error) {
 	switch {
 	case strings.HasPrefix(vector, "CVSS:3.0/"):
