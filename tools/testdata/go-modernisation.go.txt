@@ -1,0 +1,9 @@
+package probe
+
+func boundedIndex(index int, values []int) int {
+	maximum := index
+	if len(values) < index {
+		maximum = len(values)
+	}
+	return maximum
+}
