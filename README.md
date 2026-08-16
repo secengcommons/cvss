@@ -5,7 +5,7 @@
 
 The module implements the published CVSS 2.0, 3.0, 3.1 and 4.0 vector formats. Each version has its own concrete API. Parsing is strict, output is canonical and changing a metric returns a new vector rather than mutating the original
 
-CVSS 1.0 is unsupported. It doesn't define an interoperable vector format precisely enough
+CVSS 1.0 is unsupported. It doesn't define an interoperable vector format precisely enough to implement
 
 ## Summary
 - [Support](#support)

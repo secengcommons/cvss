@@ -39,7 +39,7 @@ run_go_fix() (
   go fix -diff ./... >"$output"
   if [[ -s "$output" ]]; then
     cat "$output"
-    printf 'Go source requires modernisation.\n' >&2
+    printf 'Go source requires modernisation\n' >&2
     return 1
   fi
 )
@@ -53,7 +53,7 @@ require_complete_coverage() {
     END {
       if (NR < 2 || total == 0) exit 2
       if (missed != 0) {
-        printf "Statement coverage has %d uncovered of %d statements.\n", missed, total > "/dev/stderr"
+        printf "Statement coverage has %d uncovered of %d statements\n", missed, total > "/dev/stderr"
         exit 1
       }
     }
@@ -65,7 +65,7 @@ run_coverage() (
   cd -- "$1"
   packages=$(production_packages)
   if [[ -z "$packages" ]]; then
-    printf 'No production Go packages exist; coverage is dormant.\n'
+    printf 'No production Go packages exist; coverage is dormant\n'
     return
   fi
   profile=$(mktemp "${TMPDIR:-/tmp}/cticommons-cvss-coverage.XXXXXX")
@@ -97,14 +97,14 @@ func Value() int { return 1 }
 EOF
   output=$fixture/result.out
   if run_coverage "$fixture" >"$output" 2>&1; then
-    printf 'Coverage self-test accepted uncovered source.\n' >&2
+    printf 'Coverage self-test accepted uncovered source\n' >&2
     return 1
   fi
   grep -Fq 'Statement coverage has' "$output" || {
     cat "$output" >&2
     return 1
   }
-  printf 'Coverage rejected uncovered source.\n'
+  printf 'Coverage rejected uncovered source\n'
 )
 
 modernisation_self_test() (
@@ -124,18 +124,18 @@ EOF
   cp -- "$repository_root/testdata/verification/go-modernisation.go.txt" "$fixture/probe.go"
   output=$fixture/result.out
   if run_go_fix "$fixture" >"$output" 2>&1; then
-    printf 'Go fix self-test accepted legacy source.\n' >&2
+    printf 'Go fix self-test accepted legacy source\n' >&2
     return 1
   fi
   grep -Fq 'min(len(values), index)' "$output" || { cat "$output" >&2; return 1; }
   golangci=$(go tool -n golangci-lint)
   if (cd -- "$fixture" && "$golangci" run \
       --config "$repository_root/.golangci.yml" ./...) >"$output" 2>&1; then
-    printf 'Modernize self-test accepted legacy source.\n' >&2
+    printf 'Modernize self-test accepted legacy source\n' >&2
     return 1
   fi
   grep -Fq '(modernize)' "$output" || { cat "$output" >&2; return 1; }
-  printf 'Go fix and modernize rejected legacy source.\n'
+  printf 'Go fix and modernize rejected legacy source\n'
 )
 
 formula_mutation_self_test() (
@@ -189,8 +189,128 @@ formula_mutation_self_test() (
   reject_mutation cvss31/cvss31.go 'value*100000+.5' 'value*100000+.4' ./cvss31 TestRoundupUsesFiveDecimalIntermediate
   reject_mutation cvss40/macro_scores.go '0:   100,' '0:   99,' ./cvss40 TestMacroVectors
   reject_mutation cvss40/cvss40.go '(value+epsilon)*10' 'value*10' ./cvss40 TestCompleteReferenceSet
-  printf 'Formula qualification killed 8 mutations.\n'
+  printf 'Formula qualification killed 8 mutations\n'
 )
+
+check_workflow_references() (
+  local action bytes file files line reference root total
+  root=$1
+  files=0
+  total=0
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    files=$((files + 1))
+    if ((files > 16)) || [[ ! -f "$file" || -L "$file" ]]; then
+      printf 'Workflow inventory is not bounded regular files: %s\n' "$file" >&2
+      return 1
+    fi
+    bytes=$(wc -c <"$file")
+    total=$((total + bytes))
+    if ((bytes > 65536 || total > 262144)); then
+      printf 'Workflow source exceeds its byte budget: %s\n' "$file" >&2
+      return 1
+    fi
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line=${line%$'\r'}
+      if ((${#line} > 4096)); then
+        printf 'Workflow line exceeds its byte budget: %s\n' "$file" >&2
+        return 1
+      fi
+      if [[ "$line" =~ ^[[:space:]]*(---|\.\.\.)[[:space:]]*$ ]] ||
+          [[ "$line" =~ \<\<[[:space:]]*: ]] ||
+          [[ "$line" =~ (^|[[:space:]\[\{,])([\*\&])[A-Za-z_] ]]; then
+        printf 'Unsupported workflow YAML structure: %s\n' "$file" >&2
+        return 1
+      fi
+      if [[ "$line" =~ ^[[:space:]]*(container|services)[[:space:]]*: ]]; then
+        printf 'Workflow container images are not governed: %s\n' "$file" >&2
+        return 1
+      fi
+      if [[ "$line" =~ ^[[:space:]]*(-[[:space:]]+)?uses[[:space:]]*:[[:space:]]*(.*)$ ]]; then
+        reference=${BASH_REMATCH[2]}
+        if [[ ! "$reference" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}[[:space:]]*(\#[[:space:]].*)?$ ]]; then
+          printf 'Workflow action is not pinned to a full commit: %s: %s\n' "$file" "$reference" >&2
+          return 1
+        fi
+        action=${reference%%@*}
+        case "$action" in
+          actions/checkout|actions/setup-go|actions/dependency-review-action|github/codeql-action/init|github/codeql-action/analyze) ;;
+          *) printf 'Workflow action is not approved: %s\n' "$action" >&2; return 1 ;;
+        esac
+      elif [[ "$line" =~ (^|[^A-Za-z0-9_-])uses([^A-Za-z0-9_-]|$) ]]; then
+        printf 'Unsupported workflow uses syntax: %s\n' "$file" >&2
+        return 1
+      fi
+    done <"$file"
+  done < <(find "$root/.github/workflows" -type f \( -name '*.yml' -o -name '*.yaml' \) -print | sort)
+  if ((files == 0)); then
+    printf 'No workflow files are governed\n' >&2
+    return 1
+  fi
+  if find "$root/.github/actions" -type f \( -name 'action.yml' -o -name 'action.yaml' \) -print -quit 2>/dev/null | grep -q .; then
+    printf 'Local actions are outside the governed workflow boundary\n' >&2
+    return 1
+  fi
+)
+
+workflow_policy_self_test() (
+  local fixture output temp_root
+  temp_root=${TMPDIR:-/tmp}
+  fixture=$(mktemp -d "$temp_root/cticommons-cvss-workflow-test.XXXXXX")
+  case "$fixture" in
+    "$temp_root"/cticommons-cvss-workflow-test.*) ;;
+    *) printf 'Unsafe workflow fixture: %s\n' "$fixture" >&2; return 1 ;;
+  esac
+  trap 'rm -rf -- "$fixture"' EXIT
+  mkdir -p -- "$fixture/.github/workflows"
+  output=$fixture/result.out
+
+  cat >"$fixture/.github/workflows/test.yml" <<'EOF'
+name: Test
+on: push
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+EOF
+  check_workflow_references "$fixture"
+
+  reject_workflow() {
+    local expected=$1
+    shift
+    printf '%s\n' "$@" >"$fixture/.github/workflows/test.yml"
+    if check_workflow_references "$fixture" >"$output" 2>&1; then
+      printf 'Workflow policy accepted %s\n' "$expected" >&2
+      return 1
+    fi
+  }
+
+  reject_workflow 'a mutable action' 'uses: actions/checkout@main'
+  reject_workflow 'alternate uses spacing' 'uses : actions/checkout@main'
+  reject_workflow 'an aliased key' 'name: &u uses' '*u: actions/checkout@main'
+  reject_workflow 'a local action' 'uses: ./.github/actions/test'
+  reject_workflow 'an unapproved action' 'uses: attacker/action@0123456789012345678901234567890123456789'
+  reject_workflow 'a container image' 'container: attacker.example/build:latest'
+  reject_workflow 'a trailing document' 'name: Test' '---' 'uses: actions/checkout@main'
+  printf '%65537s' x >"$fixture/.github/workflows/test.yml"
+  if check_workflow_references "$fixture" >"$output" 2>&1; then
+    printf 'Workflow policy accepted oversized source\n' >&2
+    return 1
+  fi
+  printf 'Workflow policy rejected mutable and ungoverned execution\n'
+)
+
+run_workflows() {
+  local actionlint shellcheck
+  cd -- "$repository_root"
+  actionlint=$(go tool -n actionlint)
+  shellcheck=$(go tool -n shellcheck)
+  step 'Workflow Policy Self-Test' workflow_policy_self_test
+  step 'Workflow References' check_workflow_references "$repository_root"
+  step 'Workflow Syntax' "$actionlint" -shellcheck="$shellcheck"
+}
 
 run_static() {
   local packages
@@ -200,12 +320,13 @@ run_static() {
   step 'Linter Configuration' go tool golangci-lint config verify
   step 'Shell Syntax' bash -n ./.github/scripts/verify.sh
   step 'Shell Analysis' go tool shellcheck ./.github/scripts/verify.sh
+  run_workflows
   step 'Coverage Self-Test' coverage_self_test
   step 'Modernisation Self-Test' modernisation_self_test
   step 'Formula Mutation Self-Test' formula_mutation_self_test
   packages=$(production_packages)
   if [[ -z "$packages" ]]; then
-    printf '\nNo production Go packages exist; source analysis is dormant.\n'
+    printf '\nNo production Go packages exist; source analysis is dormant\n'
     return
   fi
   step 'Go Fix' run_go_fix "$repository_root"
@@ -221,6 +342,12 @@ run_tests() {
   step 'Go Toolchain' require_toolchain
   step 'Go Test and Coverage' run_coverage "$repository_root"
   step 'Go Race' go test -race -count=1 -shuffle=on ./...
+}
+
+run_platform() {
+  cd -- "$repository_root"
+  step 'Go Toolchain' require_toolchain
+  step 'Go Test' go test -count=1 -shuffle=on ./...
 }
 
 run_compatibility() {
@@ -244,7 +371,7 @@ run_campaign() {
     done <<<"$targets"
   done <<<"$packages"
   if [[ "$found" == false ]]; then
-    printf 'No fuzz targets exist; campaign is dormant.\n'
+    printf 'No fuzz targets exist; campaign is dormant\n'
   fi
 }
 
@@ -253,7 +380,8 @@ case "${1:-}" in
   static) run_static ;;
   compatibility) run_compatibility ;;
   test) run_tests ;;
+  platform) run_platform ;;
   campaign) run_campaign ;;
-  self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test ;;
-  *) printf 'Usage: %s all|static|compatibility|test|campaign|self-test\n' "${0##*/}" >&2; exit 2 ;;
+  self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test; workflow_policy_self_test ;;
+  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|self-test\n' "${0##*/}" >&2; exit 2 ;;
 esac
