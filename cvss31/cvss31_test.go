@@ -41,33 +41,49 @@ func TestPublishedBaseVectors(t *testing.T) {
 func TestPublishedFixtureAttribution(t *testing.T) {
 	t.Parallel()
 
-	var source struct {
-		Owner, Licence, Terms, Transformation string
-		CVSS31Source                          string `json:"cvss_31_source"`
-		Files                                 []struct {
-			Path, SHA256 string
-			Length       int
-		}
-	}
+	var source fixtureSource
 	if err := json.Unmarshal(readFixture(t, "source.json"), &source); err != nil {
 		t.Fatalf("decode source record: %v", err)
 	}
-	var file struct {
-		Path, SHA256 string
-		Length       int
-	}
-	for _, candidate := range source.Files {
-		if candidate.Path == "v31-base.json" {
-			file = candidate
-		}
-	}
-	data := readFixture(t, file.Path)
-	digest := sha256.Sum256(data)
 	if source.Owner != "Forum of Incident Response and Security Teams, Inc." || source.Licence == "" ||
 		source.Terms != "https://www.first.org/cvss/v4.0/specification-document#CVSS-License" ||
 		source.CVSS31Source != "https://www.first.org/cvss/v3.1/examples" || source.Transformation == "" ||
-		file.Path != "v31-base.json" || file.Length != len(data) || file.SHA256 != fmt.Sprintf("%x", digest) {
+		len(source.CVSS31Complete.Sources) != 2 || source.CVSS31Complete.Transformation == "" {
 		t.Fatalf("source record does not bind the published fixture: %#v", source)
+	}
+	assertFixtureBindings(t, source.Files)
+}
+
+type fixtureSource struct {
+	Owner, Licence, Terms, Transformation string
+	CVSS31Source                          string `json:"cvss_31_source"`
+	CVSS31Complete                        struct {
+		Sources        []string
+		Transformation string
+	} `json:"cvss_31_complete_qualification"`
+	Files []fixtureFile
+}
+
+type fixtureFile struct {
+	Path, SHA256 string
+	Length       int
+}
+
+func assertFixtureBindings(tb testing.TB, candidates []fixtureFile) {
+	tb.Helper()
+	files := make(map[string]fixtureFile)
+	for _, candidate := range candidates {
+		if candidate.Path == "v31-base.json" || candidate.Path == "v31-complete.json" {
+			files[candidate.Path] = candidate
+		}
+	}
+	for _, name := range []string{"v31-base.json", "v31-complete.json"} {
+		file := files[name]
+		data := readFixture(tb, name)
+		digest := sha256.Sum256(data)
+		if file.Path != name || file.Length != len(data) || file.SHA256 != fmt.Sprintf("%x", digest) {
+			tb.Fatalf("source record does not bind %s: %#v", name, file)
+		}
 	}
 }
 
@@ -152,6 +168,185 @@ func TestBaseRejectsNonBaseMetrics(t *testing.T) {
 		if _, err := ParseBase(base + suffix); !errors.Is(err, ErrNonBaseVector) {
 			t.Fatalf("ParseBase suffix %q error = %v", suffix, err)
 		}
+	}
+}
+
+func TestParseCompleteVector(t *testing.T) {
+	t.Parallel()
+
+	input := "CVSS:3.1/MA:H/RC:R/AV:P/CR:L/AC:H/PR:L/UI:R/S:U/C:L/I:H/A:N/E:F/RL:T/IR:M/AR:H/MAV:A/MAC:L/MPR:H/MUI:N/MS:C/MC:N/MI:L"
+	vector, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := "CVSS:3.1/AV:P/AC:H/PR:L/UI:R/S:U/C:L/I:H/A:N/E:F/RL:T/RC:R/CR:L/IR:M/AR:H/MAV:A/MAC:L/MPR:H/MUI:N/MS:C/MC:N/MI:L/MA:H"
+	if vector.String() != want {
+		t.Fatalf("String() = %q, want %q", vector.String(), want)
+	}
+	wantOptional := []Metric{
+		{"E", "F"}, {"RL", "T"}, {"RC", "R"}, {"CR", "L"}, {"IR", "M"}, {"AR", "H"},
+		{"MAV", "A"}, {"MAC", "L"}, {"MPR", "H"}, {"MUI", "N"}, {"MS", "C"},
+		{"MC", "N"}, {"MI", "L"}, {"MA", "H"},
+	}
+	if !reflect.DeepEqual(vector.OptionalMetrics(), wantOptional) {
+		t.Fatalf("OptionalMetrics() = %#v", vector.OptionalMetrics())
+	}
+}
+
+func TestParseCanonicalisesExplicitNotDefined(t *testing.T) {
+	t.Parallel()
+
+	base := "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+	vector, err := Parse(base + "/E:X/RL:X/RC:X/CR:X/IR:X/AR:X/MAV:X/MAC:X/MPR:X/MUI:X/MS:X/MC:X/MI:X/MA:X")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if vector.String() != base || vector.OptionalMetrics() != nil {
+		t.Fatalf("canonical vector = %q %#v", vector.String(), vector.OptionalMetrics())
+	}
+}
+
+func TestParseAcceptsEveryOptionalValue(t *testing.T) {
+	t.Parallel()
+
+	base := "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+	values := []string{"XUPFH", "XUWTO", "XCRU", "XHML", "XHML", "XHML", "XNALP", "XLH", "XNLH", "XNR", "XUC", "XHLN", "XHLN", "XHLN"}
+	for index, allowed := range values {
+		for _, value := range allowed {
+			text := base + "/" + optionalNames[index] + ":" + string(value)
+			if _, err := Parse(text); err != nil {
+				t.Fatalf("Parse(%q): %v", text, err)
+			}
+		}
+	}
+}
+
+func TestParseRejectsInvalidCompleteVectors(t *testing.T) {
+	t.Parallel()
+
+	base := "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+	for _, text := range []string{
+		base + "/E:A", base + "/E:F/E:H", base + "/XX:H", base + "/MS:H",
+		base + "/E", base + "/E:", base + "/MAV:NN", base + "/E:H/",
+		strings.Replace(base, "/A:H", "", 1), "CVSS:3.0" + strings.TrimPrefix(base, "CVSS:3.1"),
+	} {
+		if _, err := Parse(text); !errors.Is(err, ErrInvalidVector) {
+			t.Fatalf("Parse(%q) error = %v", text, err)
+		}
+	}
+}
+
+func TestCompleteScores(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		vector                             string
+		base, temporal, environment, final float64
+	}{
+		{"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:U/RL:O/RC:U/CR:H/IR:L/AR:M/MAV:L/MAC:H/MPR:L/MUI:R/MS:C/MC:L/MI:H/MA:N", 9.8, 7.8, 3.9, 3.9},
+		{"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N/MC:H", 0.0, 0.0, 7.5, 7.5},
+	}
+	for _, test := range tests {
+		vector, err := Parse(test.vector)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", test.vector, err)
+		}
+		assertScore(t, vector.BaseScore, test.base)
+		assertScore(t, vector.TemporalScore, test.temporal)
+		assertScore(t, vector.EnvironmentalScore, test.environment)
+		assertScore(t, vector.Score, test.final)
+	}
+}
+
+func TestPublishedCompleteScores(t *testing.T) {
+	t.Parallel()
+
+	var tests []struct {
+		Source, Vector                       string
+		Base, Temporal, Environmental, Final float64
+	}
+	if err := json.Unmarshal(readFixture(t, "v31-complete.json"), &tests); err != nil {
+		t.Fatalf("decode complete vectors: %v", err)
+	}
+	for _, test := range tests {
+		vector, err := Parse(test.Vector)
+		if err != nil || test.Source == "" {
+			t.Fatalf("Parse(%q): %v, source %q", test.Vector, err, test.Source)
+		}
+		assertScore(t, vector.BaseScore, test.Base)
+		assertScore(t, vector.TemporalScore, test.Temporal)
+		assertScore(t, vector.EnvironmentalScore, test.Environmental)
+		assertScore(t, vector.Score, test.Final)
+	}
+}
+
+func TestCompleteZeroVectorFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	var vector Vector
+	if vector.OptionalMetrics() != nil {
+		t.Fatalf("zero OptionalMetrics() = %#v", vector.OptionalMetrics())
+	}
+	for _, score := range []func() (Score, error){vector.BaseScore, vector.TemporalScore, vector.EnvironmentalScore} {
+		if _, err := score(); !errors.Is(err, ErrInvalidVector) {
+			t.Fatalf("score error = %v", err)
+		}
+	}
+}
+
+func TestTemporalMetricWeights(t *testing.T) {
+	t.Parallel()
+
+	base := "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+	tests := map[string]float64{
+		"E:U": 9.0, "E:P": 9.3, "E:F": 9.6, "E:H": 9.8,
+		"RL:O": 9.4, "RL:T": 9.5, "RL:W": 9.6, "RL:U": 9.8,
+		"RC:U": 9.1, "RC:R": 9.5, "RC:C": 9.8,
+	}
+	for metric, want := range tests {
+		vector, err := Parse(base + "/" + metric)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", metric, err)
+		}
+		assertScore(t, vector.TemporalScore, want)
+	}
+}
+
+func TestEnvironmentalScoreIsZeroWithoutEffectiveImpact(t *testing.T) {
+	t.Parallel()
+
+	vector, err := Parse("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:N/CR:H")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	assertScore(t, vector.EnvironmentalScore, 0)
+}
+
+func FuzzParse(f *testing.F) {
+	f.Add("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:F/RL:O/RC:R/CR:H/MAV:A/MS:C")
+	f.Add("")
+	f.Fuzz(func(t *testing.T, text string) {
+		first, err := Parse(text)
+		if err != nil {
+			return
+		}
+		second, err := Parse(first.String())
+		if err != nil || !reflect.DeepEqual(first, second) {
+			t.Fatalf("round trip = %#v %#v %v", first, second, err)
+		}
+		for _, score := range []func() (Score, error){first.BaseScore, first.TemporalScore, first.EnvironmentalScore, first.Score} {
+			if _, err := score(); err != nil {
+				t.Fatalf("score: %v", err)
+			}
+		}
+	})
+}
+
+func assertScore(tb testing.TB, calculate func() (Score, error), want float64) {
+	tb.Helper()
+	score, err := calculate()
+	if err != nil || score.Float64() != want {
+		tb.Fatalf("score = %v, %v; want %.1f", score, err, want)
 	}
 }
 

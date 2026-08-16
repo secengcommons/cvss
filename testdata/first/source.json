@@ -6,6 +6,13 @@
   "cvss_40_source": "https://www.first.org/cvss/v4.0/examples",
   "cvss_40_document_version": "1.8",
   "transformation": "selected published Base vector, score and severity values encoded as JSON",
+  "cvss_31_complete_qualification": {
+    "sources": [
+      "https://www.first.org/cvss/v3.1/user-guide",
+      "https://www.first.org/cvss/v3-1/use-design"
+    ],
+    "transformation": "selected the published complete vector and Base, Temporal and Environmental scores and encoded them as JSON"
+  },
   "cvss_40_qualification": {
     "repository": "https://github.com/FIRSTdotorg/cvss-resources",
     "commit": "48f85d84a036de9c610668f9496c12b5040a9ae3",
@@ -58,6 +65,11 @@
       "path": "v31-base.json",
       "sha256": "279b7b3ad77170d7fc9662e0ff01980914f0256b06bc0a8c790ae2039b1117cc",
       "length": 559
+    },
+    {
+      "path": "v31-complete.json",
+      "sha256": "bd48e4dfd50d045fe64bfb770c53ac14ad876b34fc30628e3c299aaf65ca0627",
+      "length": 451
     },
     {
       "path": "v40-base.json",
