@@ -1,0 +1,18 @@
+[
+  {
+    "source": "https://www.first.org/cvss/v3.1/user-guide",
+    "vector": "CVSS:3.0/AV:P/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:H/E:H/RL:U/RC:U",
+    "base": 5.0,
+    "temporal": 4.7,
+    "environmental": 4.7,
+    "final": 4.7
+  },
+  {
+    "source": "https://www.first.org/cvss/v3.0/use-design",
+    "vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N/RL:O/CR:L",
+    "base": 8.6,
+    "temporal": 8.2,
+    "environmental": 6.0,
+    "final": 6.0
+  }
+]
