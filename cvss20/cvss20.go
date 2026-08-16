@@ -320,7 +320,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 	adjusted := adjustedImpact(vector.values, vector.optional)
 	adjustedBase := baseFromImpact(vector.values, adjusted)
 	adjustedTemporal := temporalScore(adjustedBase, vector.optional)
-	value := (float64(adjustedTemporal)/10 + (10-float64(adjustedTemporal)/10)*damageWeight(optionalValue(3, vector.optional[3]))) * distributionWeight(optionalValue(4, vector.optional[4]))
+	value := (float64(adjustedTemporal)/10 + (10-float64(adjustedTemporal)/10)*damageWeight(vector.optional[3])) * distributionWeight(vector.optional[4])
 	return Score{tenths: round(value)}, nil
 }
 
@@ -362,14 +362,14 @@ func impact(values [6]byte) float64 {
 }
 
 func adjustedImpact(values [6]byte, optional [8]byte) float64 {
-	confidentiality := impactWeight(values[3]) * requirementWeight(optionalValue(5, optional[5]))
-	integrity := impactWeight(values[4]) * requirementWeight(optionalValue(6, optional[6]))
-	availability := impactWeight(values[5]) * requirementWeight(optionalValue(7, optional[7]))
+	confidentiality := impactWeight(values[3]) * requirementWeight(optional[5])
+	integrity := impactWeight(values[4]) * requirementWeight(optional[6])
+	availability := impactWeight(values[5]) * requirementWeight(optional[7])
 	return clamp(10.41*(1-(1-confidentiality)*(1-integrity)*(1-availability)), 10)
 }
 
 func temporalScore(base int, optional [8]byte) int {
-	value := float64(base) / 10 * exploitWeight(optionalValue(0, optional[0])) * remediationWeight(optionalValue(1, optional[1])) * confidenceWeight(optionalValue(2, optional[2]))
+	value := float64(base) / 10 * exploitWeight(optional[0]) * remediationWeight(optional[1]) * confidenceWeight(optional[2])
 	return round(value)
 }
 
@@ -417,76 +417,76 @@ func impactWeight(value byte) float64 {
 	}
 }
 
-func exploitWeight(value string) float64 {
+func exploitWeight(value byte) float64 {
 	switch value {
-	case "U":
+	case 1:
 		return .85
-	case "POC":
+	case 2:
 		return .9
-	case "F":
+	case 3:
 		return .95
 	default:
 		return 1
 	}
 }
 
-func remediationWeight(value string) float64 {
+func remediationWeight(value byte) float64 {
 	switch value {
-	case "OF":
+	case 1:
 		return .87
-	case "TF":
+	case 2:
 		return .9
-	case "W":
+	case 3:
 		return .95
 	default:
 		return 1
 	}
 }
 
-func confidenceWeight(value string) float64 {
+func confidenceWeight(value byte) float64 {
 	switch value {
-	case "UC":
+	case 1:
 		return .9
-	case "UR":
+	case 2:
 		return .95
 	default:
 		return 1
 	}
 }
 
-func damageWeight(value string) float64 {
+func damageWeight(value byte) float64 {
 	switch value {
-	case "L":
+	case 2:
 		return .1
-	case "LM":
+	case 3:
 		return .3
-	case "MH":
+	case 4:
 		return .4
-	case "H":
+	case 5:
 		return .5
 	default:
 		return 0
 	}
 }
 
-func distributionWeight(value string) float64 {
+func distributionWeight(value byte) float64 {
 	switch value {
-	case "N":
+	case 1:
 		return 0
-	case "L":
+	case 2:
 		return .25
-	case "M":
+	case 3:
 		return .75
 	default:
 		return 1
 	}
 }
 
-func requirementWeight(value string) float64 {
+func requirementWeight(value byte) float64 {
 	switch value {
-	case "L":
+	case 1:
 		return .5
-	case "H":
+	case 3:
 		return 1.51
 	default:
 		return 1
@@ -551,9 +551,6 @@ func optionalCode(index int, value string) (byte, bool) {
 }
 
 func optionalValue(index int, code byte) string {
-	if code == 0 {
-		return ""
-	}
 	return optionalValues[index][code-1]
 }
 
