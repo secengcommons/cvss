@@ -1,4 +1,4 @@
-// Package cvss20 parses and scores CVSS 2.0 vectors.
+// Package cvss20 parses and scores CVSS 2.0 vectors
 package cvss20
 
 import (
@@ -160,7 +160,7 @@ func (vector Vector) textLength() int {
 	return length + count - 1
 }
 
-// AppendText appends the canonical vector to text.
+// AppendText appends the canonical vector to text
 func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.valid {
 		return text, ErrInvalidVector
@@ -168,10 +168,10 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	return append(text, vector.String()...), nil
 }
 
-// MarshalText returns the canonical vector.
+// MarshalText returns the canonical vector
 func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(nil) }
 
-// MarshalJSON returns the canonical vector as a JSON string.
+// MarshalJSON returns the canonical vector as a JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
 	text, err := vector.MarshalText()
 	if err != nil {

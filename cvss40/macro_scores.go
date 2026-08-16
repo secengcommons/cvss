@@ -1,7 +1,7 @@
 package cvss40
 
-// macroScores contains the 270 equivalence-class scores defined by CVSS 4.0.
-// Keys concatenate EQ1 through EQ6; values are tenths.
+// macroScores contains the 270 equivalence-class scores defined by CVSS 4.0
+// Keys concatenate EQ1 through EQ6; values are tenths
 var macroScores = map[int]int{
 	0:      100,
 	1:      99,

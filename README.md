@@ -1,13 +1,13 @@
 Strict Go implementations of Common Vulnerability Scoring System specifications.
 
 Implemented:
-- complete CVSS 2.0 vectors and grouped scores;
-- complete CVSS 3.0 vectors and grouped scores;
-- complete CVSS 3.1 vectors and grouped scores;
-- complete CVSS 4.0 vectors and scores;
-- canonical parsing and serialisation;
-- specification-defined one-decimal scoring;
-- qualification against retained FIRST reference material.
+- complete CVSS 2.0 vectors and grouped scores
+- complete CVSS 3.0 vectors and grouped scores
+- complete CVSS 3.1 vectors and grouped scores
+- complete CVSS 4.0 vectors and scores
+- canonical parsing and serialisation
+- specification-defined one-decimal scoring
+- qualification against retained FIRST reference material
 
 CVSS 1.0 is unsupported. Its historical material does not define a sufficiently deterministic interoperable vector contract for this library.
 
