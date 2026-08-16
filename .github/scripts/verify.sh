@@ -367,7 +367,7 @@ run_campaign() {
       [[ -n "$target" ]] || continue
       found=true
       step "Fuzz $package/$target" go test -run '^$' -fuzz "^${target}$" \
-        -fuzztime="${FUZZTIME:-15s}" -parallel="${FUZZ_PARALLEL:-4}" "$package"
+        -fuzztime="${FUZZTIME:-1000000x}" -parallel="${FUZZ_PARALLEL:-4}" "$package"
     done <<<"$targets"
   done <<<"$packages"
   if [[ "$found" == false ]]; then

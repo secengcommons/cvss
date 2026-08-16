@@ -1,4 +1,5 @@
 <div align="center">
+	<h1>CTI Commons CVSS</h1>
   Lightning-fast, low allocation, idiomatic CVSS parsing and scoring for Go
 </div>
 <br>
@@ -133,11 +134,11 @@ The readability trade-off is also quite wrong. On my extra box *(Windows AMD64 w
 
 Operation | Observed result
 --- | ---
-Base parsing | CTI Commons was 1.6x to 3.4x faster
-Complete parsing | CTI Commons was 1.7x to 2.7x faster
-Parsing across all versions | CTI Commons was about 2.2x faster by geometric mean
-Canonical string encoding | CTI Commons was 1.05x to 1.33x faster
-CVSS 4.0 scoring | CTI Commons was about 2.7x faster
+Base parsing | CTI Commons CVSS was 1.6x to 3.4x faster
+Complete parsing | CTI Commons CVSS was 1.7x to 2.7x faster
+Parsing across all versions | CTI Commons CVSS was about 2.2x faster by geometric mean
+Canonical string encoding | CTI Commons CVSS was 1.05x to 1.33x faster
+CVSS 4.0 scoring | CTI Commons CVSS was about 2.7x faster
 Metric lookup | Mixed, with both implementations within about 21%
 Metric replacement | Pandatix was faster, comparing in-place mutation with validated immutable replacement
 Direct CVSS 3 Environmental scoring | Pandatix was about 1.07x faster for 3.0 and effectively tied for 3.1
