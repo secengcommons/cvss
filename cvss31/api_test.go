@@ -30,6 +30,23 @@ func TestMetricLookup(t *testing.T) {
 	if _, ok := (Vector{}).Metric("AC"); ok {
 		t.Fatal("zero vector metric found")
 	}
+	if _, ok := base.Metric("unknown"); ok {
+		t.Fatal("unknown metric found")
+	}
+	assertBaseMetrics(t, base)
+}
+
+func assertBaseMetrics(t *testing.T, base Vector) {
+	t.Helper()
+	for _, name := range metricNames {
+		metric, ok := base.Metric(name)
+		if !ok {
+			t.Fatalf("base metric %s not found", name)
+		}
+		if _, err := base.WithMetric(metric); err != nil {
+			t.Fatalf("replace base metric %s: %v", name, err)
+		}
+	}
 }
 
 func TestMetricReplacement(t *testing.T) {
@@ -46,7 +63,11 @@ func TestMetricReplacement(t *testing.T) {
 	if err != nil || removed.String() != "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H" {
 		t.Fatalf("remove E = %q, %v", removed, err)
 	}
-	for _, metric := range []Metric{{Name: ""}, {Name: "AC", Value: "X"}, {Name: "unknown", Value: "N"}} {
+	added, err := removed.WithMetric(Metric{Name: "E", Value: "P"})
+	if err != nil || added.String() != "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H/E:P" {
+		t.Fatalf("add E = %q, %v", added, err)
+	}
+	for _, metric := range []Metric{{Name: ""}, {Name: "AC", Value: "X"}, {Name: "E", Value: "?"}, {Name: "unknown", Value: "N"}} {
 		if _, err := vector.WithMetric(metric); !errors.Is(err, ErrInvalidVector) {
 			t.Fatalf("WithMetric(%#v) error = %v", metric, err)
 		}
@@ -99,8 +120,10 @@ func TestTransactionalDecoding(t *testing.T) {
 func assertJSONDecoding(t *testing.T, source string, before Vector) {
 	t.Helper()
 	decoded := before
-	if err := json.Unmarshal([]byte(`"`+source+`"`), &decoded); err != nil || decoded != before {
-		t.Fatalf("JSON decode = %q, %v", decoded, err)
+	for _, input := range []string{`"` + source + `"`, ` "` + source + `" `, `"\u0043` + source[1:] + `"`} {
+		if err := json.Unmarshal([]byte(input), &decoded); err != nil || decoded != before {
+			t.Fatalf("JSON %s decode = %q, %v", input, decoded, err)
+		}
 	}
 	for _, input := range []string{`null`, `123`, `{}`, `"invalid"`} {
 		if err := json.Unmarshal([]byte(input), &decoded); err == nil || decoded != before {

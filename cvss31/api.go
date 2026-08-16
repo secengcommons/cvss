@@ -2,62 +2,73 @@ package cvss31
 
 import (
 	"encoding/json"
-	"strings"
+
+	"github.com/cticommons/cvss/internal/jsontext"
 )
 
 // False for absent or unknown metrics
 func (vector Vector) Metric(name string) (Metric, bool) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return Metric{}, false
 	}
-	if index := metricIndex(name); index >= 0 {
-		return Metric{Name: name, Value: metricString(vector.values[index])}, true
+	raw := vector.raw()
+	var value byte
+	if len(name) == 1 {
+		value = shortBaseMetricValue(raw, name)
+	} else {
+		value = longBaseMetricValue(raw, name)
 	}
-	if index := optionalIndex(name); index >= 0 && vector.optional[index] != 0 {
-		return Metric{Name: name, Value: metricString(vector.optional[index])}, true
+	if value == 0 {
+		index := optionalIndex(name)
+		if index < 0 {
+			return Metric{}, false
+		}
+		value = vector.optionalValue(index)
+		if value == 0 {
+			return Metric{}, false
+		}
 	}
-	return Metric{}, false
+	return Metric{Name: name, Value: metricString(value)}, true
 }
 
 // The receiver is unchanged
 func (vector Vector) WithMetric(metric Metric) (Vector, error) {
-	if !vector.valid || len(metric.Value) != 1 {
+	if !vector.Valid() || len(metric.Value) != 1 {
 		return Vector{}, ErrInvalidVector
 	}
-	value := metric.Value[0]
-	if index := metricIndex(metric.Name); index >= 0 {
-		if strings.IndexByte(metricValues[index], value) < 0 {
+	values, stride, radix, base := baseMetricSpec(metric.Name)
+	if !base {
+		index := optionalIndex(metric.Name)
+		if index < 0 {
 			return Vector{}, ErrInvalidVector
 		}
-		vector.values[index] = value
-		vector.baseTenths = baseScore(vector.values)
-		return vector, nil
+		replacement, valid := vector.withOptional(index, metric.Value[0])
+		if !valid {
+			return Vector{}, ErrInvalidVector
+		}
+		return replacement, nil
 	}
-	index := optionalIndex(metric.Name)
-	if index < 0 || strings.IndexByte(optionalValues[index], value) < 0 {
+	digit, valid := digitIndex(values, metric.Value[0])
+	if !valid {
 		return Vector{}, ErrInvalidVector
 	}
-	if value == 'X' {
-		value = 0
-	}
-	vector.optional[index] = value
-	return vector, nil
+	return vector.withDigit(stride, radix, digit), nil
 }
 
 // Unrounded Base subscore
 func (vector Vector) Impact() (float64, error) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return 0, ErrInvalidVector
 	}
-	return impact(vector.values), nil
+	return impact(vector.decode().values), nil
 }
 
 // Unrounded Base subscore
 func (vector Vector) Exploitability() (float64, error) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return 0, ErrInvalidVector
 	}
-	return exploitability(vector.values), nil
+	return exploitability(vector.decode().values), nil
 }
 
 // Receiver replacement is transactional
@@ -72,6 +83,9 @@ func (vector *Vector) UnmarshalText(text []byte) error {
 func (vector *Vector) UnmarshalJSON(data []byte) error {
 	if vector == nil || len(data) == 0 || len(data) > maxJSONVectorBytes {
 		return ErrInvalidVector
+	}
+	if text, ok := jsontext.Plain(data); ok {
+		return vector.UnmarshalText(text)
 	}
 	var text string
 	if err := json.Unmarshal(data, &text); err != nil {

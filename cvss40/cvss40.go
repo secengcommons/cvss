@@ -61,9 +61,7 @@ type Metric struct {
 
 // The zero value is invalid
 type Vector struct {
-	values   [11]byte
-	optional [21]byte
-	valid    bool
+	state uint64
 }
 
 // Stored in exact tenths
@@ -79,7 +77,7 @@ func ParseBase(text string) (Vector, error) {
 	if !strings.HasPrefix(text, header) || strings.HasSuffix(text, "/") {
 		return Vector{}, ErrInvalidVector
 	}
-	vector, next, ok := parseRequired(text, len(header))
+	builder, next, ok := parseRequired(text, len(header))
 	if !ok {
 		return Vector{}, ErrInvalidVector
 	}
@@ -91,8 +89,7 @@ func ParseBase(text string) (Vector, error) {
 		}
 		return Vector{}, ErrInvalidVector
 	}
-	vector.valid = true
-	return vector, nil
+	return builder.vector(), nil
 }
 
 // Requires mandatory metric order
@@ -103,43 +100,41 @@ func Parse(text string) (Vector, error) {
 	if !strings.HasPrefix(text, header) {
 		return Vector{}, ErrInvalidVector
 	}
-	vector, next, ok := parseRequired(text, len(header))
-	if !ok || !parseOptional(&vector, text, next) {
+	builder, next, ok := parseRequired(text, len(header))
+	if !ok || !parseOptional(&builder, text, next) {
 		return Vector{}, ErrInvalidVector
 	}
-	vector.valid = true
-	return vector, nil
+	return builder.vector(), nil
 }
 
-func parseRequired(text string, position int) (Vector, int, bool) {
-	var vector Vector
+func parseRequired(text string, position int) (stateBuilder, int, bool) {
+	var builder stateBuilder
 	for index, name := range metricNames {
 		if index > 0 {
 			if position >= len(text) || text[position] != '/' {
-				return Vector{}, 0, false
+				return stateBuilder{}, 0, false
 			}
 			position++
 		}
 		if position+len(name)+2 > len(text) || text[position:position+len(name)] != name || text[position+len(name)] != ':' {
-			return Vector{}, 0, false
+			return stateBuilder{}, 0, false
 		}
 		value := text[position+len(name)+1]
-		if strings.IndexByte(metricValues[index], value) < 0 {
-			return Vector{}, 0, false
+		if !builder.setBase(index, value) {
+			return stateBuilder{}, 0, false
 		}
-		vector.values[index] = value
 		position += len(name) + 2
 	}
 	if position < len(text) {
 		if text[position] != '/' {
-			return Vector{}, 0, false
+			return stateBuilder{}, 0, false
 		}
 		position++
 	}
-	return vector, position, true
+	return builder, position, true
 }
 
-func parseOptional(vector *Vector, text string, position int) bool {
+func parseOptional(builder *stateBuilder, text string, position int) bool {
 	next := 0
 	for position < len(text) {
 		part, following, found := nextPart(text, position)
@@ -153,7 +148,7 @@ func parseOptional(vector *Vector, text string, position int) bool {
 		if index < next || !valid {
 			return false
 		}
-		vector.optional[index] = code
+		builder.setOptional(index, code)
 		next = index + 1
 		position = following
 	}
@@ -169,9 +164,10 @@ func nextPart(text string, start int) (string, int, bool) {
 
 // Invalid vectors produce an empty string
 func (vector Vector) String() string {
-	if !vector.valid {
+	if !vector.Valid() {
 		return ""
 	}
+	decoded := vector.decode()
 	var text strings.Builder
 	text.Grow(vector.textLength())
 	text.WriteString(prefix)
@@ -179,9 +175,9 @@ func (vector Vector) String() string {
 		text.WriteByte('/')
 		text.WriteString(name)
 		text.WriteByte(':')
-		text.WriteByte(vector.values[index])
+		text.WriteByte(decoded.values[index])
 	}
-	for index, value := range vector.optional {
+	for index, value := range decoded.optional {
 		if !defined(value) {
 			continue
 		}
@@ -194,11 +190,12 @@ func (vector Vector) String() string {
 }
 
 func (vector Vector) textLength() int {
+	decoded := vector.decode()
 	length := len(prefix)
 	for _, name := range metricNames {
 		length += len(name) + 3
 	}
-	for index, value := range vector.optional {
+	for index, value := range decoded.optional {
 		if defined(value) {
 			length += len(optionalNames[index]) + len(optionalValue(index, value)) + 2
 		}
@@ -208,7 +205,7 @@ func (vector Vector) textLength() int {
 
 // Output is canonical
 func (vector Vector) AppendText(text []byte) ([]byte, error) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return text, ErrInvalidVector
 	}
 	return vector.appendText(text), nil
@@ -219,7 +216,7 @@ func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(ni
 
 // Output is a canonical JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return nil, ErrInvalidVector
 	}
 	text := make([]byte, 1, vector.textLength()+2)
@@ -229,13 +226,14 @@ func (vector Vector) MarshalJSON() ([]byte, error) {
 }
 
 func (vector Vector) appendText(text []byte) []byte {
+	decoded := vector.decode()
 	text = append(text, prefix...)
 	for index, name := range metricNames {
 		text = append(text, '/')
 		text = append(text, name...)
-		text = append(text, ':', vector.values[index])
+		text = append(text, ':', decoded.values[index])
 	}
-	for index, value := range vector.optional {
+	for index, value := range decoded.optional {
 		if !defined(value) {
 			continue
 		}
@@ -250,22 +248,24 @@ func (vector Vector) appendText(text []byte) []byte {
 // Mandatory order
 func (vector Vector) Metrics() [11]Metric {
 	var metrics [11]Metric
-	if !vector.valid {
+	if !vector.Valid() {
 		return metrics
 	}
+	decoded := vector.decode()
 	for index, name := range metricNames {
-		metrics[index] = Metric{Name: name, Value: metricString(vector.values[index])}
+		metrics[index] = Metric{Name: name, Value: metricString(decoded.values[index])}
 	}
 	return metrics
 }
 
 // Defined metrics in mandatory order
 func (vector Vector) OptionalMetrics() []Metric {
-	if !vector.valid {
+	if !vector.Valid() {
 		return nil
 	}
+	decoded := vector.decode()
 	count := 0
-	for _, value := range vector.optional {
+	for _, value := range decoded.optional {
 		if defined(value) {
 			count++
 		}
@@ -278,14 +278,14 @@ func (vector Vector) OptionalMetrics() []Metric {
 
 // Appended in mandatory order
 func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return metrics, ErrInvalidVector
 	}
 	return vector.appendOptionalMetrics(metrics), nil
 }
 
 func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
-	for index, value := range vector.optional {
+	for index, value := range vector.decode().optional {
 		if defined(value) {
 			metrics = append(metrics, Metric{Name: optionalNames[index], Value: optionalValue(index, value)})
 		}
@@ -294,12 +294,13 @@ func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
 }
 
 func (vector Vector) Nomenclature() string {
-	if !vector.valid {
+	if !vector.Valid() {
 		return ""
 	}
-	threat := defined(vector.optional[threatMetricIndex])
+	optional := vector.decode().optional
+	threat := defined(optional[threatMetricIndex])
 	environmental := false
-	for _, value := range vector.optional[requirementMetricStart:supplementalMetricStart] {
+	for _, value := range optional[requirementMetricStart:supplementalMetricStart] {
 		environmental = environmental || defined(value)
 	}
 	switch {
@@ -316,11 +317,11 @@ func (vector Vector) Nomenclature() string {
 
 // True only for vectors produced by validated operations
 func (vector Vector) Valid() bool {
-	return vector.valid
+	return vector.state != 0
 }
 
 func (vector Vector) Score() (Score, error) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return Score{}, ErrInvalidVector
 	}
 	effective := vector.effective()
@@ -353,20 +354,21 @@ type scoringValues struct {
 }
 
 func (vector Vector) effective() scoringValues {
-	values := scoringValues{metrics: vector.values, exploitation: 'A', requirements: [3]byte{'H', 'H', 'H'}}
-	if defined(vector.optional[threatMetricIndex]) {
-		values.exploitation = optionalValue(threatMetricIndex, vector.optional[threatMetricIndex])[0]
+	decoded := vector.decode()
+	values := scoringValues{metrics: decoded.values, exploitation: 'A', requirements: [3]byte{'H', 'H', 'H'}}
+	if defined(decoded.optional[threatMetricIndex]) {
+		values.exploitation = optionalValue(threatMetricIndex, decoded.optional[threatMetricIndex])[0]
 	}
 	for index := range values.requirements {
 		optionalIndex := index + requirementMetricStart
-		if defined(vector.optional[optionalIndex]) {
-			values.requirements[index] = optionalValue(optionalIndex, vector.optional[optionalIndex])[0]
+		if defined(decoded.optional[optionalIndex]) {
+			values.requirements[index] = optionalValue(optionalIndex, decoded.optional[optionalIndex])[0]
 		}
 	}
 	for index := range values.metrics {
 		optionalIndex := index + modifiedMetricStart
-		if defined(vector.optional[optionalIndex]) {
-			values.metrics[index] = optionalValue(optionalIndex, vector.optional[optionalIndex])[0]
+		if defined(decoded.optional[optionalIndex]) {
+			values.metrics[index] = optionalValue(optionalIndex, decoded.optional[optionalIndex])[0]
 		}
 	}
 	return values

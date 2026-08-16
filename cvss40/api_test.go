@@ -30,9 +30,21 @@ func TestMetricLookup(t *testing.T) {
 	if _, ok := (Vector{}).Metric("AC"); ok {
 		t.Fatal("zero vector metric found")
 	}
+	if _, ok := base.Metric("unknown"); ok {
+		t.Fatal("unknown metric found")
+	}
+	assertRequiredMetrics(t, base)
+}
+
+func assertRequiredMetrics(t *testing.T, base Vector) {
+	t.Helper()
 	for _, name := range []string{"AV", "AC", "AT", "PR", "UI", "VC", "VI", "VA", "SC", "SI", "SA"} {
-		if _, ok := base.Metric(name); !ok {
+		metric, ok := base.Metric(name)
+		if !ok {
 			t.Fatalf("required metric %s not found", name)
+		}
+		if _, err := base.WithMetric(metric); err != nil {
+			t.Fatalf("replace required metric %s: %v", name, err)
 		}
 	}
 }
@@ -51,7 +63,7 @@ func TestMetricReplacement(t *testing.T) {
 	if err != nil || removed.String() != "CVSS:4.0/AV:N/AC:H/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N" {
 		t.Fatalf("remove E = %q, %v", removed, err)
 	}
-	for _, metric := range []Metric{{Name: ""}, {Name: "AC", Value: "X"}, {Name: "unknown", Value: "N"}} {
+	for _, metric := range []Metric{{Name: ""}, {Name: "AC"}, {Name: "AC", Value: "X"}, {Name: "unknown", Value: "N"}} {
 		if _, err := vector.WithMetric(metric); !errors.Is(err, ErrInvalidVector) {
 			t.Fatalf("WithMetric(%#v) error = %v", metric, err)
 		}
@@ -104,8 +116,10 @@ func TestTransactionalDecoding(t *testing.T) {
 func assertJSONDecoding(t *testing.T, source string, before Vector) {
 	t.Helper()
 	decoded := before
-	if err := json.Unmarshal([]byte(`"`+source+`"`), &decoded); err != nil || decoded != before {
-		t.Fatalf("JSON decode = %q, %v", decoded, err)
+	for _, input := range []string{`"` + source + `"`, ` "` + source + `" `, `"\u0043` + source[1:] + `"`} {
+		if err := json.Unmarshal([]byte(input), &decoded); err != nil || decoded != before {
+			t.Fatalf("JSON %s decode = %q, %v", input, decoded, err)
+		}
 	}
 	for _, input := range []string{`null`, `123`, `{}`, `"invalid"`} {
 		if err := json.Unmarshal([]byte(input), &decoded); err == nil || decoded != before {

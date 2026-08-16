@@ -2,42 +2,51 @@ package cvss40
 
 import (
 	"encoding/json"
-	"strings"
+
+	"github.com/cticommons/cvss/internal/jsontext"
 )
 
 // False for absent or unknown metrics
 func (vector Vector) Metric(name string) (Metric, bool) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return Metric{}, false
 	}
-	if index := requiredMetricIndex(name); index >= 0 {
-		return Metric{Name: name, Value: metricString(vector.values[index])}, true
+	value, base := baseMetricValue(vector.state-1, name)
+	if !base {
+		index := optionalIndex(name)
+		if index < 0 {
+			return Metric{}, false
+		}
+		code := vector.optionalCode(index)
+		if !defined(code) {
+			return Metric{}, false
+		}
+		value = optionalValue(index, code)
 	}
-	if index := optionalIndex(name); index >= 0 && defined(vector.optional[index]) {
-		return Metric{Name: name, Value: optionalValue(index, vector.optional[index])}, true
-	}
-	return Metric{}, false
+	return Metric{Name: name, Value: value}, true
 }
 
 // The receiver is unchanged
 func (vector Vector) WithMetric(metric Metric) (Vector, error) {
-	if !vector.valid {
+	if !vector.Valid() {
 		return Vector{}, ErrInvalidVector
 	}
 	if index := requiredMetricIndex(metric.Name); index >= 0 {
-		if len(metric.Value) != 1 || strings.IndexByte(metricValues[index], metric.Value[0]) < 0 {
+		if len(metric.Value) != 1 {
 			return Vector{}, ErrInvalidVector
 		}
-		vector.values[index] = metric.Value[0]
-		return vector, nil
+		replacement, valid := vector.withBase(index, metric.Value[0])
+		if !valid {
+			return Vector{}, ErrInvalidVector
+		}
+		return replacement, nil
 	}
 	index := optionalIndex(metric.Name)
 	code, valid := optionalCode(index, metric.Value)
 	if !valid {
 		return Vector{}, ErrInvalidVector
 	}
-	vector.optional[index] = code
-	return vector, nil
+	return vector.withOptional(index, code), nil
 }
 
 // Receiver replacement is transactional
@@ -52,6 +61,9 @@ func (vector *Vector) UnmarshalText(text []byte) error {
 func (vector *Vector) UnmarshalJSON(data []byte) error {
 	if vector == nil || len(data) == 0 || len(data) > maxJSONVectorBytes {
 		return ErrInvalidVector
+	}
+	if text, ok := jsontext.Plain(data); ok {
+		return vector.UnmarshalText(text)
 	}
 	var text string
 	if err := json.Unmarshal(data, &text); err != nil {

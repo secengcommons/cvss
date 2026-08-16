@@ -544,6 +544,19 @@ func independentRoundup(value float64) int {
 	return int(math.Floor(scaled/10000) + 1)
 }
 
+func TestScoreByteRejectsImpossibleValue(t *testing.T) {
+	for _, value := range []int{-1, 101} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("scoreByte(%d) did not panic", value)
+				}
+			}()
+			scoreByte(value)
+		}()
+	}
+}
+
 func readFixture(tb testing.TB, name string) []byte {
 	tb.Helper()
 	if filepath.Base(name) != name {

@@ -312,6 +312,19 @@ func TestScoreRepresentation(t *testing.T) {
 	}
 }
 
+func TestScoreByteRejectsImpossibleValue(t *testing.T) {
+	for _, value := range []int{-1, 101} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("scoreByte(%d) did not panic", value)
+				}
+			}()
+			scoreByte(value)
+		}()
+	}
+}
+
 func TestCanonicalEncoding(t *testing.T) {
 	t.Parallel()
 
