@@ -30,6 +30,32 @@ production_packages() {
     sed '/^[[:space:]]*$/d'
 }
 
+test_packages() {
+  go list -f '{{if or .GoFiles .CgoFiles .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... |
+    sed '/^[[:space:]]*$/d'
+}
+
+tool_path() (
+  cd -- "$repository_root/tools"
+  go tool -n "$1"
+)
+
+run_in_directory() (
+  cd -- "$1"
+  shift
+  "$@"
+)
+
+require_minimal_module_graph() {
+  local modules
+  modules=$(go list -m all)
+  if [[ "$modules" != 'github.com/cticommons/cvss' ]]; then
+    printf 'Production module graph contains external modules:\n%s\n' "$modules" >&2
+    return 1
+  fi
+  printf 'Production module graph contains only github.com/cticommons/cvss\n'
+}
+
 run_go_fix() (
   local output root
   root=$1
@@ -128,7 +154,7 @@ EOF
     return 1
   fi
   grep -Fq 'min(len(values), index)' "$output" || { cat "$output" >&2; return 1; }
-  golangci=$(go tool -n golangci-lint)
+  golangci=$(tool_path golangci-lint)
   if (cd -- "$fixture" && "$golangci" run \
       --config "$repository_root/.golangci.yml" ./...) >"$output" 2>&1; then
     printf 'Modernize self-test accepted legacy source\n' >&2
@@ -147,8 +173,10 @@ formula_mutation_self_test() (
     *) printf 'Unsafe formula fixture: %s\n' "$fixture" >&2; return 1 ;;
   esac
   trap 'rm -rf -- "$fixture"' EXIT
-  cp -- go.mod go.sum "$fixture/"
+  cp -- go.mod "$fixture/"
   cp -R -- cvss20 cvss30 cvss31 cvss40 testdata "$fixture/"
+  mkdir -p -- "$fixture/internal"
+  cp -R -- internal/jsontext "$fixture/internal/"
   output=$fixture/result.out
 
   reject_mutation() {
@@ -305,21 +333,30 @@ EOF
 run_workflows() {
   local actionlint shellcheck
   cd -- "$repository_root"
-  actionlint=$(go tool -n actionlint)
-  shellcheck=$(go tool -n shellcheck)
+  actionlint=$(tool_path actionlint)
+  shellcheck=$(tool_path shellcheck)
   step 'Workflow Policy Self-Test' workflow_policy_self_test
   step 'Workflow References' check_workflow_references "$repository_root"
   step 'Workflow Syntax' "$actionlint" -shellcheck="$shellcheck"
 }
 
 run_static() {
-  local packages
+  local golangci govulncheck packages shellcheck
   cd -- "$repository_root"
   step 'Go Toolchain' require_toolchain
+  golangci=$(tool_path golangci-lint)
+  govulncheck=$(tool_path govulncheck)
+  shellcheck=$(tool_path shellcheck)
   step 'Module Tidy' go mod tidy -diff
-  step 'Linter Configuration' go tool golangci-lint config verify
+  step 'Module Verification' go mod verify
+  step 'Differential Module Tidy' go -C differential mod tidy -diff
+  step 'Differential Module Verification' go -C differential mod verify
+  step 'Tool Module Tidy' go -C tools mod tidy -diff
+  step 'Tool Module Verification' go -C tools mod verify
+  step 'Module Surface' require_minimal_module_graph
+  step 'Linter Configuration' "$golangci" config verify
   step 'Shell Syntax' bash -n ./.github/scripts/verify.sh
-  step 'Shell Analysis' go tool shellcheck ./.github/scripts/verify.sh
+  step 'Shell Analysis' "$shellcheck" ./.github/scripts/verify.sh
   run_workflows
   step 'Coverage Self-Test' coverage_self_test
   step 'Modernisation Self-Test' modernisation_self_test
@@ -330,10 +367,15 @@ run_static() {
     return
   fi
   step 'Go Fix' run_go_fix "$repository_root"
-  step 'Go Format' go tool golangci-lint fmt --diff
+  step 'Differential Go Fix' run_go_fix "$repository_root/differential"
+  step 'Go Format' "$golangci" fmt --diff
+  step 'Differential Go Format' run_in_directory "$repository_root/differential" "$golangci" fmt --config ../.golangci.yml --diff
   step 'Go Vet' go vet ./...
-  step 'Go Lint' go tool golangci-lint run
-  step 'Go Vulnerabilities' go tool govulncheck ./...
+  step 'Differential Go Vet' go -C differential vet ./...
+  step 'Go Lint' "$golangci" run
+  step 'Differential Go Lint' run_in_directory "$repository_root/differential" "$golangci" run --config ../.golangci.yml ./...
+  step 'Go Vulnerabilities' "$govulncheck" ./...
+  step 'Differential Vulnerabilities' run_in_directory "$repository_root/differential" "$govulncheck" ./...
   step 'Go Build' go build -trimpath ./...
 }
 
@@ -341,25 +383,28 @@ run_tests() {
   cd -- "$repository_root"
   step 'Go Toolchain' require_toolchain
   step 'Go Test and Coverage' run_coverage "$repository_root"
+  step 'Differential Go Test' go -C differential test -count=1 -shuffle=on ./...
   step 'Go Race' go test -race -count=1 -shuffle=on ./...
+  step 'Differential Go Race' go -C differential test -race -count=1 -shuffle=on ./...
 }
 
 run_platform() {
   cd -- "$repository_root"
   step 'Go Toolchain' require_toolchain
   step 'Go Test' go test -count=1 -shuffle=on ./...
+  step 'Differential Go Test' go -C differential test -count=1 -shuffle=on ./...
 }
 
 run_compatibility() {
   cd -- "$repository_root"
   step 'Go 1.25 Compatibility' env GOTOOLCHAIN=go1.25.0 go test -count=1 -shuffle=on ./...
+  step 'Differential Go 1.25 Compatibility' run_in_directory "$repository_root/differential" env GOTOOLCHAIN=go1.25.0 go test -count=1 -shuffle=on ./...
 }
 
-run_campaign() {
+run_fuzz_module() (
   local found package packages target targets
-  cd -- "$repository_root"
-  step 'Go Toolchain' require_toolchain
-  packages=$(production_packages)
+  cd -- "$1"
+  packages=$(test_packages)
   found=false
   while IFS= read -r package; do
     targets=$(go test -list '^Fuzz[A-Za-z0-9_]+$' "$package" | awk '/^Fuzz[A-Za-z0-9_]+$/')
@@ -373,6 +418,13 @@ run_campaign() {
   if [[ "$found" == false ]]; then
     printf 'No fuzz targets exist; campaign is dormant\n'
   fi
+)
+
+run_campaign() {
+  cd -- "$repository_root"
+  step 'Go Toolchain' require_toolchain
+  run_fuzz_module "$repository_root"
+  run_fuzz_module "$repository_root/differential"
 }
 
 case "${1:-}" in
