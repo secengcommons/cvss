@@ -31,6 +31,7 @@ type Metric struct {
 
 type Vector struct {
 	values [8]byte
+	valid  bool
 }
 
 type Score struct {
@@ -54,19 +55,30 @@ func ParseBase(text string) (Vector, error) {
 	if len(parts) != len(metricNames)+1 {
 		return Vector{}, ErrInvalidVector
 	}
-
-	var vector Vector
-	for index, name := range metricNames {
-		metric, value, found := strings.Cut(parts[index+1], ":")
-		if !found || metric != name || len(value) != 1 || !strings.ContainsRune(metricValues[index], rune(value[0])) {
-			return Vector{}, ErrInvalidVector
-		}
-		vector.values[index] = value[0]
+	vector, valid := parseBaseParts(parts[1:])
+	if !valid {
+		return Vector{}, ErrInvalidVector
 	}
 	return vector, nil
 }
 
+func parseBaseParts(parts []string) (Vector, bool) {
+	vector := Vector{valid: true}
+	for _, part := range parts {
+		metric, value, found := strings.Cut(part, ":")
+		index := metricIndex(metric)
+		if !found || index < 0 || vector.values[index] != 0 || len(value) != 1 || !strings.ContainsRune(metricValues[index], rune(value[0])) {
+			return Vector{}, false
+		}
+		vector.values[index] = value[0]
+	}
+	return vector, true
+}
+
 func (vector Vector) String() string {
+	if !vector.valid {
+		return ""
+	}
 	var text strings.Builder
 	text.Grow(55)
 	text.WriteString("CVSS:3.1")
@@ -81,13 +93,23 @@ func (vector Vector) String() string {
 
 func (vector Vector) Metrics() [8]Metric {
 	var metrics [8]Metric
+	if !vector.valid {
+		return metrics
+	}
 	for index, name := range metricNames {
 		metrics[index] = Metric{Name: name, Value: string(vector.values[index])}
 	}
 	return metrics
 }
 
-func (vector Vector) Score() Score {
+func (vector Vector) Valid() bool {
+	return vector.valid
+}
+
+func (vector Vector) Score() (Score, error) {
+	if !vector.valid {
+		return Score{}, ErrInvalidVector
+	}
 	weights := [...]map[byte]float64{
 		{'N': .85, 'A': .62, 'L': .55, 'P': .2},
 		{'L': .77, 'H': .44},
@@ -105,14 +127,14 @@ func (vector Vector) Score() Score {
 		impact = 7.52*(iss-.029) - 3.25*math.Pow(iss-.02, 15)
 	}
 	if impact <= 0 {
-		return Score{}
+		return Score{}, nil
 	}
 	exploitability := 8.22 * weights[0][vector.values[0]] * weights[1][vector.values[1]] * privileges[vector.values[2]] * weights[3][vector.values[3]]
 	raw := impact + exploitability
 	if vector.values[4] == 'C' {
 		raw *= 1.08
 	}
-	return Score{tenths: roundup(math.Min(raw, 10))}
+	return Score{tenths: roundup(math.Min(raw, 10))}, nil
 }
 
 func (score Score) Tenths() int {
@@ -152,6 +174,15 @@ func validText(text string) bool {
 		}
 	}
 	return true
+}
+
+func metricIndex(name string) int {
+	for index, candidate := range metricNames {
+		if name == candidate {
+			return index
+		}
+	}
+	return -1
 }
 
 func roundup(value float64) int {

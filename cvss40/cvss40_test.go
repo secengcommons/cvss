@@ -55,8 +55,9 @@ func TestReferenceSet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseBase(%q): %v", test.Vector, err)
 		}
-		if vector.String() != test.Vector || vector.Score().Float64() != test.Score || vector.Score().Severity() != test.Severity {
-			t.Fatalf("ParseBase(%q) = %q %s %s", test.Vector, vector.String(), vector.Score(), vector.Score().Severity())
+		score := scoreOf(t, vector)
+		if vector.String() != test.Vector || score.Float64() != test.Score || score.Severity() != test.Severity {
+			t.Fatalf("ParseBase(%q) = %q %s %s", test.Vector, vector.String(), score, score.Severity())
 		}
 		eq := equivalence(vector.values)
 		coveredMacroScores[eq[0]*100000+eq[1]*10000+eq[2]*1000+eq[3]*100+eq[4]*10+eq[5]] = true
@@ -103,7 +104,11 @@ func TestPublishedBaseVectors(t *testing.T) {
 	}
 	for _, test := range tests {
 		vector, err := ParseBase(test.Vector)
-		if err != nil || vector.Score().Float64() != test.Score || vector.Score().String() == "" || vector.Score().Severity() != test.Severity {
+		if err != nil {
+			t.Fatalf("ParseBase(%q): %v", test.Vector, err)
+		}
+		score := scoreOf(t, vector)
+		if score.Float64() != test.Score || score.String() == "" || score.Severity() != test.Severity {
 			t.Fatalf("published vector %q = %#v, %v", test.Vector, vector, err)
 		}
 	}
@@ -116,9 +121,24 @@ func TestBaseRetainsMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseBase: %v", err)
 	}
+	if !vector.Valid() {
+		t.Fatal("parsed vector is invalid")
+	}
 	want := [11]Metric{{"AV", "P"}, {"AC", "H"}, {"AT", "P"}, {"PR", "L"}, {"UI", "A"}, {"VC", "H"}, {"VI", "L"}, {"VA", "N"}, {"SC", "H"}, {"SI", "L"}, {"SA", "N"}}
 	if vector.Metrics() != want {
 		t.Fatalf("Metrics() = %#v", vector.Metrics())
+	}
+}
+
+func TestZeroVectorFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	var vector Vector
+	if vector.Valid() || vector.String() != "" || vector.Metrics() != ([11]Metric{}) {
+		t.Fatalf("zero Vector = valid %t, %q, %#v", vector.Valid(), vector.String(), vector.Metrics())
+	}
+	if _, err := vector.Score(); !errors.Is(err, ErrInvalidVector) {
+		t.Fatalf("Score() error = %v", err)
 	}
 }
 
@@ -202,10 +222,21 @@ func FuzzParseBase(f *testing.F) {
 			return
 		}
 		second, err := ParseBase(first.String())
-		if err != nil || !reflect.DeepEqual(first, second) || first.Score() != second.Score() {
+		firstScore, firstScoreErr := first.Score()
+		secondScore, secondScoreErr := second.Score()
+		if err != nil || firstScoreErr != nil || secondScoreErr != nil || !reflect.DeepEqual(first, second) || firstScore != secondScore {
 			t.Fatalf("round trip = %#v %#v %v", first, second, err)
 		}
 	})
+}
+
+func scoreOf(tb testing.TB, vector Vector) Score {
+	tb.Helper()
+	score, err := vector.Score()
+	if err != nil {
+		tb.Fatalf("Score: %v", err)
+	}
+	return score
 }
 
 func readFixture(tb testing.TB, name string) []byte {

@@ -31,6 +31,7 @@ type Metric struct {
 
 type Vector struct {
 	values [11]byte
+	valid  bool
 }
 
 type Score struct {
@@ -62,10 +63,14 @@ func ParseBase(text string) (Vector, error) {
 		}
 		vector.values[index] = value[0]
 	}
+	vector.valid = true
 	return vector, nil
 }
 
 func (vector Vector) String() string {
+	if !vector.valid {
+		return ""
+	}
 	var text strings.Builder
 	text.Grow(63)
 	text.WriteString("CVSS:4.0")
@@ -80,15 +85,25 @@ func (vector Vector) String() string {
 
 func (vector Vector) Metrics() [11]Metric {
 	var metrics [11]Metric
+	if !vector.valid {
+		return metrics
+	}
 	for index, name := range metricNames {
 		metrics[index] = Metric{Name: name, Value: string(vector.values[index])}
 	}
 	return metrics
 }
 
-func (vector Vector) Score() Score {
+func (vector Vector) Valid() bool {
+	return vector.valid
+}
+
+func (vector Vector) Score() (Score, error) {
+	if !vector.valid {
+		return Score{}, ErrInvalidVector
+	}
 	if noImpact(vector.values) {
-		return Score{}
+		return Score{}, nil
 	}
 	eq := equivalence(vector.values)
 	current := macroScore(eq)
@@ -101,7 +116,7 @@ func (vector Vector) Score() Score {
 	if lower.count > 0 {
 		reduction /= float64(lower.count)
 	}
-	return Score{tenths: int(math.Round((float64(current)/10 - reduction) * 10))}
+	return Score{tenths: int(math.Round((float64(current)/10 - reduction) * 10))}, nil
 }
 
 func (score Score) Tenths() int { return score.tenths }

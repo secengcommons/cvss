@@ -30,9 +30,10 @@ func TestPublishedBaseVectors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseBase(%q): %v", test.Vector, err)
 		}
-		if parsed.String() != test.Vector || parsed.Score().Float64() != test.Score ||
-			parsed.Score().String() != fmt.Sprintf("%.1f", test.Score) || parsed.Score().Severity() != test.Severity {
-			t.Fatalf("ParseBase(%q) = %q %q %q", test.Vector, parsed.String(), parsed.Score(), parsed.Score().Severity())
+		score := scoreOf(t, parsed)
+		if !parsed.Valid() || parsed.String() != test.Vector || score.Float64() != test.Score ||
+			score.String() != fmt.Sprintf("%.1f", test.Score) || score.Severity() != test.Severity {
+			t.Fatalf("ParseBase(%q) = %q %q %q", test.Vector, parsed.String(), score, score.Severity())
 		}
 	}
 }
@@ -85,6 +86,31 @@ func TestBaseMetricValues(t *testing.T) {
 	}
 }
 
+func TestBaseAcceptsAnyMetricOrder(t *testing.T) {
+	t.Parallel()
+
+	vector, err := ParseBase("CVSS:3.1/A:N/I:L/C:H/S:U/UI:R/PR:L/AC:H/AV:A")
+	if err != nil {
+		t.Fatalf("ParseBase: %v", err)
+	}
+	want := "CVSS:3.1/AV:A/AC:H/PR:L/UI:R/S:U/C:H/I:L/A:N"
+	if vector.String() != want {
+		t.Fatalf("String() = %q, want %q", vector.String(), want)
+	}
+}
+
+func TestZeroVectorFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	var vector Vector
+	if vector.Valid() || vector.String() != "" || vector.Metrics() != ([8]Metric{}) {
+		t.Fatalf("zero Vector = valid %t, %q, %#v", vector.Valid(), vector.String(), vector.Metrics())
+	}
+	if _, err := vector.Score(); !errors.Is(err, ErrInvalidVector) {
+		t.Fatalf("Score() error = %v", err)
+	}
+}
+
 func TestBaseRetainsMetrics(t *testing.T) {
 	t.Parallel()
 
@@ -105,7 +131,7 @@ func TestBaseRejectsInvalidVectors(t *testing.T) {
 	tests := []string{
 		"", "CVSS:4.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
 		strings.TrimSuffix(base, "/A:H"), base + "/A:H", base + "/",
-		strings.Replace(base, "/AV:N/AC:L", "/AC:L/AV:N", 1),
+		strings.Replace(base, "/AC:L", "/AV:N", 1),
 		strings.Replace(base, "/AV:N", "/XX:N", 1),
 		strings.Replace(base, "/AV:N", "/AV:X", 1),
 		strings.ToLower(base), base + " ", base + "\n", base + "\x80",
@@ -150,8 +176,9 @@ func TestBaseMatchesIndependentFormula(t *testing.T) {
 			t.Fatalf("ParseBase(%q): %v", vector, err)
 		}
 		want, raw := independentScore(selected)
-		if parsed.Score().Tenths() != want || parsed.Score().Float64() != float64(want)/10 {
-			t.Fatalf("Score(%q) = %d, want %d", vector, parsed.Score().Tenths(), want)
+		score := scoreOf(t, parsed)
+		if score.Tenths() != want || score.Float64() != float64(want)/10 {
+			t.Fatalf("Score(%q) = %d, want %d", vector, score.Tenths(), want)
 		}
 		cases++
 		if raw*10 != float64(want) {
@@ -194,10 +221,21 @@ func FuzzParseBase(f *testing.F) {
 			return
 		}
 		second, err := ParseBase(first.String())
-		if err != nil || !reflect.DeepEqual(first, second) || first.Score() != second.Score() {
+		firstScore, firstScoreErr := first.Score()
+		secondScore, secondScoreErr := second.Score()
+		if err != nil || firstScoreErr != nil || secondScoreErr != nil || !reflect.DeepEqual(first, second) || firstScore != secondScore {
 			t.Fatalf("round trip = %#v %#v %v", first, second, err)
 		}
 	})
+}
+
+func scoreOf(tb testing.TB, vector Vector) Score {
+	tb.Helper()
+	score, err := vector.Score()
+	if err != nil {
+		tb.Fatalf("Score: %v", err)
+	}
+	return score
 }
 
 func vectorFor(values []byte) string {
