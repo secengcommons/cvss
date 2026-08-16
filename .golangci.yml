@@ -19,6 +19,10 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
+    recvcheck:
+      exclusions:
+        - "*.UnmarshalJSON"
+        - "*.UnmarshalText"
   default: none
   enable:
     - govet

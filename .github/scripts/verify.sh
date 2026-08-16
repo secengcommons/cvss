@@ -183,11 +183,11 @@ formula_mutation_self_test() (
 
   reject_mutation cvss20/cvss20.go '.646' '.5' ./cvss20 TestBaseMatchesIndependentFormula
   reject_mutation cvss20/cvss20.go 'value*10 + .5' 'value*10 + .4' ./cvss20 TestBaseMatchesIndependentFormula
-  reject_mutation cvss30/cvss30.go 'math.Pow(miss-.02, 15)' 'math.Pow(miss-.02, 13)' ./cvss30 TestEnvironmentalFormulaVersionBoundary
+  reject_mutation cvss30/cvss30.go 'pow15(miss-.02)' '0' ./cvss30 TestEnvironmentalFormulaVersionBoundary
   reject_mutation cvss30/cvss30.go 'math.Ceil(value * 10)' 'math.Floor(value * 10)' ./cvss30 TestRoundupUsesDirectCeiling
-  reject_mutation cvss31/cvss31.go 'math.Pow(miss*.9731-.02, 13)' 'math.Pow(miss-.02, 15)' ./cvss31 TestEnvironmentalFormulaVersionBoundary
+  reject_mutation cvss31/cvss31.go 'pow13(miss*.9731-.02)' 'pow15(miss-.02)' ./cvss31 TestEnvironmentalFormulaVersionBoundary
   reject_mutation cvss31/cvss31.go 'math.Round(value*100000)' 'value*100000' ./cvss31 TestRoundupUsesFiveDecimalIntermediate
-  reject_mutation cvss40/macro_scores.go '0:      100,' '0:      99,' ./cvss40 TestMacroVectors
+  reject_mutation cvss40/macro_scores.go '0:   100,' '0:   99,' ./cvss40 TestMacroVectors
   reject_mutation cvss40/cvss40.go '(value+epsilon)*10' 'value*10' ./cvss40 TestCompleteReferenceSet
   printf 'Formula qualification killed 8 mutations.\n'
 )

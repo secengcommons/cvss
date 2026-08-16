@@ -1,7 +1,6 @@
 package cvss40
 
 import (
-	"encoding/json"
 	"errors"
 	"math"
 	"slices"
@@ -12,7 +11,9 @@ import (
 const maxVectorBytes = 256
 
 var (
+	// ErrInvalidVector reports malformed, incomplete or unsupported CVSS 4.0 content
 	ErrInvalidVector = errors.New("invalid CVSS 4.0 vector")
+	// ErrNonBaseVector reports optional metrics passed to ParseBase
 	ErrNonBaseVector = errors.New("CVSS 4.0 vector contains non-Base metrics")
 )
 
@@ -32,22 +33,29 @@ var optionalValues = [...][]string{
 	{"X", "N", "P"}, {"X", "N", "Y"}, {"X", "A", "U", "I"}, {"X", "D", "C"}, {"X", "L", "M", "H"},
 	{"X", "Clear", "Green", "Amber", "Red"},
 }
+var metricStrings = [26]string{0: "A", 7: "H", 11: "L", 13: "N", 15: "P"}
 
+// Metric is one canonical CVSS 4.0 metric name and value
 type Metric struct {
 	Name  string
 	Value string
 }
 
+// Vector is a validated CVSS 4.0 vector value
+//
+// The zero value is invalid
 type Vector struct {
 	values   [11]byte
 	optional [21]string
 	valid    bool
 }
 
+// Score is a CVSS 4.0 score stored in exact tenths
 type Score struct {
 	tenths int
 }
 
+// ParseBase parses a Base-only vector in mandatory metric order
 func ParseBase(text string) (Vector, error) {
 	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
@@ -72,6 +80,7 @@ func ParseBase(text string) (Vector, error) {
 	return vector, nil
 }
 
+// Parse parses a complete vector in mandatory metric order
 func Parse(text string) (Vector, error) {
 	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
@@ -134,6 +143,7 @@ func nextPart(text string, start int) (string, int, bool) {
 	return text[start:], len(text), true
 }
 
+// String returns the canonical vector or an empty string for an invalid vector
 func (vector Vector) String() string {
 	if !vector.valid {
 		return ""
@@ -177,7 +187,7 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.valid {
 		return text, ErrInvalidVector
 	}
-	return append(text, vector.String()...), nil
+	return vector.appendText(text), nil
 }
 
 // MarshalText returns the canonical vector
@@ -185,40 +195,70 @@ func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(ni
 
 // MarshalJSON returns the canonical vector as a JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
-	text, err := vector.MarshalText()
-	if err != nil {
-		return nil, err
+	if !vector.valid {
+		return nil, ErrInvalidVector
 	}
-	return json.Marshal(string(text))
+	text := make([]byte, 1, vector.textLength()+2)
+	text[0] = '"'
+	text = vector.appendText(text)
+	return append(text, '"'), nil
 }
 
+func (vector Vector) appendText(text []byte) []byte {
+	text = append(text, "CVSS:4.0"...)
+	for index, name := range metricNames {
+		text = append(text, '/')
+		text = append(text, name...)
+		text = append(text, ':', vector.values[index])
+	}
+	for index, value := range vector.optional {
+		if !defined(value) {
+			continue
+		}
+		text = append(text, '/')
+		text = append(text, optionalNames[index]...)
+		text = append(text, ':')
+		text = append(text, value...)
+	}
+	return text
+}
+
+// Metrics returns the eleven Base metrics in mandatory order
 func (vector Vector) Metrics() [11]Metric {
 	var metrics [11]Metric
 	if !vector.valid {
 		return metrics
 	}
 	for index, name := range metricNames {
-		metrics[index] = Metric{Name: name, Value: string(vector.values[index])}
+		metrics[index] = Metric{Name: name, Value: metricString(vector.values[index])}
 	}
 	return metrics
 }
 
+// OptionalMetrics returns defined optional metrics in mandatory order
 func (vector Vector) OptionalMetrics() []Metric {
 	if !vector.valid {
 		return nil
 	}
-	metrics := make([]Metric, 0, len(vector.optional))
+	count := 0
+	for _, value := range vector.optional {
+		if defined(value) {
+			count++
+		}
+	}
+	if count == 0 {
+		return nil
+	}
+	metrics := make([]Metric, 0, count)
 	for index, value := range vector.optional {
 		if value != "" && value != "X" {
 			metrics = append(metrics, Metric{Name: optionalNames[index], Value: value})
 		}
 	}
-	if len(metrics) == 0 {
-		return nil
-	}
 	return metrics
 }
 
+// Nomenclature returns the defined CVSS 4.0 metric-group nomenclature
 func (vector Vector) Nomenclature() string {
 	if !vector.valid {
 		return ""
@@ -240,10 +280,12 @@ func (vector Vector) Nomenclature() string {
 	}
 }
 
+// Valid reports whether the vector was constructed by a validated operation
 func (vector Vector) Valid() bool {
 	return vector.valid
 }
 
+// Score returns the CVSS 4.0 score
 func (vector Vector) Score() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -295,14 +337,18 @@ func (vector Vector) effective() scoringValues {
 	return values
 }
 
+// Tenths returns the exact integer tenths representation
 func (score Score) Tenths() int { return score.tenths }
 
+// Float64 returns the score as a decimal value
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
+// String returns the score with one decimal place
 func (score Score) String() string {
 	return strconv.FormatFloat(score.Float64(), 'f', 1, 64)
 }
 
+// Severity returns the specification severity rating in uppercase
 func (score Score) Severity() string {
 	switch {
 	case score.tenths == 0:
@@ -321,16 +367,86 @@ func (score Score) Severity() string {
 func validLength(text string) bool { return len(text) > 0 && len(text) <= maxVectorBytes }
 
 func optionalIndex(name string) int {
-	for index, candidate := range optionalNames {
-		if name == candidate {
-			return index
-		}
+	switch len(name) {
+	case 1:
+		return optionalIndex1(name)
+	case 2:
+		return optionalIndex2(name)
+	case 3:
+		return optionalIndex3(name)
+	}
+	return -1
+}
+
+func optionalIndex1(name string) int {
+	switch name {
+	case "E":
+		return 0
+	case "S":
+		return 15
+	case "R":
+		return 17
+	case "V":
+		return 18
+	case "U":
+		return 20
+	}
+	return -1
+}
+
+func optionalIndex2(name string) int {
+	switch name {
+	case "CR":
+		return 1
+	case "IR":
+		return 2
+	case "AR":
+		return 3
+	case "AU":
+		return 16
+	case "RE":
+		return 19
+	}
+	return -1
+}
+
+func optionalIndex3(name string) int {
+	switch name {
+	case "MAV":
+		return 4
+	case "MAC":
+		return 5
+	case "MAT":
+		return 6
+	case "MPR":
+		return 7
+	case "MUI":
+		return 8
+	case "MVC":
+		return 9
+	case "MVI":
+		return 10
+	case "MVA":
+		return 11
+	case "MSC":
+		return 12
+	case "MSI":
+		return 13
+	case "MSA":
+		return 14
 	}
 	return -1
 }
 
 func allowedOptional(index int, value string) bool {
 	return slices.Contains(optionalValues[index], value)
+}
+
+func metricString(value byte) string {
+	if value >= 'A' && value <= 'Z' {
+		return metricStrings[value-'A']
+	}
+	return ""
 }
 
 func defined(value string) bool { return value != "" && value != "X" }
@@ -416,9 +532,9 @@ func equivalence6(values [11]byte, requirements [3]byte) int {
 }
 
 func macroScore(eq macroVector) int {
-	key := eq[0]*100000 + eq[1]*10000 + eq[2]*1000 + eq[3]*100 + eq[4]*10 + eq[5]
-	score, found := macroScores[key]
-	if !found {
+	index := (((((eq[0]*2+eq[1])*3+eq[2])*3+eq[3])*3+eq[4])*2 + eq[5])
+	score := macroScores[index]
+	if score == 0 {
 		panic("missing CVSS 4.0 macro score")
 	}
 	return score

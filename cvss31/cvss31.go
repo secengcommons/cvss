@@ -2,7 +2,6 @@
 package cvss31
 
 import (
-	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -12,7 +11,9 @@ import (
 const maxVectorBytes = 256
 
 var (
+	// ErrInvalidVector reports malformed, incomplete or unsupported CVSS 3.1 content
 	ErrInvalidVector = errors.New("invalid CVSS 3.1 vector")
+	// ErrNonBaseVector reports optional metrics passed to ParseBase
 	ErrNonBaseVector = errors.New("CVSS 3.1 vector contains non-Base metrics")
 )
 
@@ -20,12 +21,17 @@ var metricNames = [...]string{"AV", "AC", "PR", "UI", "S", "C", "I", "A"}
 var metricValues = [...]string{"NALP", "LH", "NLH", "NR", "UC", "HLN", "HLN", "HLN"}
 var optionalNames = [...]string{"E", "RL", "RC", "CR", "IR", "AR", "MAV", "MAC", "MPR", "MUI", "MS", "MC", "MI", "MA"}
 var optionalValues = [...]string{"XUPFH", "XUWTO", "XCRU", "XHML", "XHML", "XHML", "XNALP", "XLH", "XNLH", "XNR", "XUC", "XHLN", "XHLN", "XHLN"}
+var metricStrings = [26]string{0: "A", 2: "C", 5: "F", 7: "H", 11: "L", 12: "M", 13: "N", 14: "O", 15: "P", 17: "R", 19: "T", 20: "U", 22: "W"}
 
+// Metric is one canonical CVSS 3.1 metric name and value
 type Metric struct {
 	Name  string
 	Value string
 }
 
+// Vector is a validated CVSS 3.1 vector value
+//
+// The zero value is invalid
 type Vector struct {
 	values     [8]byte
 	optional   [14]byte
@@ -33,10 +39,12 @@ type Vector struct {
 	valid      bool
 }
 
+// Score is a CVSS 3.1 score stored in exact tenths
 type Score struct {
 	tenths int
 }
 
+// ParseBase parses a Base-only vector and accepts metrics in any order
 func ParseBase(text string) (Vector, error) {
 	vector, err := parse(text, false)
 	if err != nil {
@@ -45,6 +53,7 @@ func ParseBase(text string) (Vector, error) {
 	return vector, nil
 }
 
+// Parse parses a complete vector and accepts metrics in any order
 func Parse(text string) (Vector, error) {
 	return parse(text, true)
 }
@@ -119,6 +128,7 @@ func setMetric(vector *Vector, name string, value byte, complete bool) bool {
 	return true
 }
 
+// String returns the canonical vector or an empty string for an invalid vector
 func (vector Vector) String() string {
 	if !vector.valid {
 		return ""
@@ -169,7 +179,7 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.valid {
 		return text, ErrInvalidVector
 	}
-	return append(text, vector.String()...), nil
+	return vector.appendText(text), nil
 }
 
 // MarshalText returns the canonical vector
@@ -177,11 +187,31 @@ func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(ni
 
 // MarshalJSON returns the canonical vector as a JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
-	text, err := vector.MarshalText()
-	if err != nil {
-		return nil, err
+	if !vector.valid {
+		return nil, ErrInvalidVector
 	}
-	return json.Marshal(string(text))
+	text := make([]byte, 1, vector.textLength()+2)
+	text[0] = '"'
+	text = vector.appendText(text)
+	return append(text, '"'), nil
+}
+
+func (vector Vector) appendText(text []byte) []byte {
+	text = append(text, "CVSS:3.1"...)
+	for index, name := range metricNames {
+		text = append(text, '/')
+		text = append(text, name...)
+		text = append(text, ':', vector.values[index])
+	}
+	for index, value := range vector.optional {
+		if value == 0 {
+			continue
+		}
+		text = append(text, '/')
+		text = append(text, optionalNames[index]...)
+		text = append(text, ':', value)
+	}
+	return text
 }
 
 func writeMetric(text *strings.Builder, name string, value byte) {
@@ -191,35 +221,45 @@ func writeMetric(text *strings.Builder, name string, value byte) {
 	text.WriteByte(value)
 }
 
+// Metrics returns the eight Base metrics in preferred order
 func (vector Vector) Metrics() [8]Metric {
 	var metrics [8]Metric
 	if !vector.valid {
 		return metrics
 	}
 	for index, name := range metricNames {
-		metrics[index] = Metric{Name: name, Value: string(vector.values[index])}
+		metrics[index] = Metric{Name: name, Value: metricString(vector.values[index])}
 	}
 	return metrics
 }
 
+// OptionalMetrics returns defined optional metrics in preferred order
 func (vector Vector) OptionalMetrics() []Metric {
 	if !vector.valid {
 		return nil
 	}
-	metrics := make([]Metric, 0, len(vector.optional))
-	for index, value := range vector.optional {
+	count := 0
+	for _, value := range vector.optional {
 		if value != 0 && value != 'X' {
-			metrics = append(metrics, Metric{Name: optionalNames[index], Value: string(value)})
+			count++
 		}
 	}
-	if len(metrics) == 0 {
+	if count == 0 {
 		return nil
+	}
+	metrics := make([]Metric, 0, count)
+	for index, value := range vector.optional {
+		if value != 0 && value != 'X' {
+			metrics = append(metrics, Metric{Name: optionalNames[index], Value: metricString(value)})
+		}
 	}
 	return metrics
 }
 
+// Valid reports whether the vector was constructed by a validated operation
 func (vector Vector) Valid() bool { return vector.valid }
 
+// BaseScore returns the specification Base score
 func (vector Vector) BaseScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -227,6 +267,7 @@ func (vector Vector) BaseScore() (Score, error) {
 	return Score{tenths: vector.baseTenths}, nil
 }
 
+// TemporalScore returns the specification Temporal score
 func (vector Vector) TemporalScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -235,6 +276,7 @@ func (vector Vector) TemporalScore() (Score, error) {
 	return Score{tenths: roundup(base * temporalWeight(vector.optional))}, nil
 }
 
+// EnvironmentalScore returns the specification Environmental score
 func (vector Vector) EnvironmentalScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -252,6 +294,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 	return Score{tenths: roundup(modifiedBase * temporalWeight(vector.optional))}, nil
 }
 
+// Score returns the highest score group containing a defined metric
 func (vector Vector) Score() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -298,7 +341,7 @@ func baseScore(metrics [8]byte) int {
 func impact(metrics [8]byte) float64 {
 	iss := 1 - (1-impactWeight(metrics[5]))*(1-impactWeight(metrics[6]))*(1-impactWeight(metrics[7]))
 	if metrics[4] == 'C' {
-		return 7.52*(iss-.029) - 3.25*math.Pow(iss-.02, 15)
+		return 7.52*(iss-.029) - 3.25*pow15(iss-.02)
 	}
 	return 6.42 * iss
 }
@@ -309,7 +352,7 @@ func modifiedImpact(metrics [8]byte, optional [14]byte) float64 {
 	availability := requirementWeight(optional[5]) * impactWeight(metrics[7])
 	miss := math.Min(1-(1-confidentiality)*(1-integrity)*(1-availability), .915)
 	if metrics[4] == 'C' {
-		return 7.52*(miss-.029) - 3.25*math.Pow(miss*.9731-.02, 13)
+		return 7.52*(miss-.029) - 3.25*pow13(miss*.9731-.02)
 	}
 	return 6.42 * miss
 }
@@ -320,6 +363,20 @@ func exploitability(metrics [8]byte) float64 {
 	pr := privilegesWeight(metrics[2], metrics[4])
 	ui := userInteractionWeight(metrics[3])
 	return 8.22 * av * ac * pr * ui
+}
+
+func pow13(value float64) float64 {
+	squared := value * value
+	fourth := squared * squared
+	eighth := fourth * fourth
+	return eighth * fourth * value
+}
+
+func pow15(value float64) float64 {
+	squared := value * value
+	fourth := squared * squared
+	eighth := fourth * fourth
+	return eighth * fourth * squared * value
 }
 
 func attackVectorWeight(value byte) float64 {
@@ -439,12 +496,16 @@ func (vector Vector) modifiedMetrics() [8]byte {
 	return metrics
 }
 
+// Tenths returns the exact integer tenths representation
 func (score Score) Tenths() int { return score.tenths }
 
+// Float64 returns the score as a decimal value
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
+// String returns the score with one decimal place
 func (score Score) String() string { return strconv.FormatFloat(score.Float64(), 'f', 1, 64) }
 
+// Severity returns the specification severity rating in uppercase
 func (score Score) Severity() string {
 	switch {
 	case score.tenths == 0:
@@ -485,12 +546,62 @@ func metricIndex(name string) int {
 }
 
 func optionalIndex(name string) int {
-	for index, candidate := range optionalNames {
-		if name == candidate {
-			return index
+	switch len(name) {
+	case 1:
+		if name == "E" {
+			return 0
 		}
+	case 2:
+		return optionalIndex2(name)
+	case 3:
+		return optionalIndex3(name)
 	}
 	return -1
+}
+
+func optionalIndex2(name string) int {
+	switch name {
+	case "RL":
+		return 1
+	case "RC":
+		return 2
+	case "CR":
+		return 3
+	case "IR":
+		return 4
+	case "AR":
+		return 5
+	case "MS":
+		return 10
+	case "MC":
+		return 11
+	case "MI":
+		return 12
+	case "MA":
+		return 13
+	}
+	return -1
+}
+
+func optionalIndex3(name string) int {
+	switch name {
+	case "MAV":
+		return 6
+	case "MAC":
+		return 7
+	case "MPR":
+		return 8
+	case "MUI":
+		return 9
+	}
+	return -1
+}
+
+func metricString(value byte) string {
+	if value >= 'A' && value <= 'Z' {
+		return metricStrings[value-'A']
+	}
+	return ""
 }
 
 func roundup(value float64) int {

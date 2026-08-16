@@ -15,6 +15,10 @@ CVSS 1.0 is unsupported. Its historical material does not define a sufficiently 
 
 `cvss.VersionOf` validates a vector and identifies its supported version without replacing the version-specific APIs.
 
+Each version package exposes a concrete `Vector`. `Metric` looks up one defined metric and `WithMetric` returns a separately validated vector without changing its source. CVSS 2.0, 3.0 and 3.1 expose their unrounded Impact and Exploitability subscores. Text and JSON decoding replace their receiver only after complete validation.
+
+`AppendText` writes canonical output into caller-owned capacity without allocation. `String`, `MarshalText` and `MarshalJSON` allocate the returned value they own.
+
 CVSS is owned by FIRST and used with permission. Scores are returned with their canonical vectors.
 
 [Qualification](docs/qualification.md) | [Development](docs/development.md) | [Contributing](CONTRIBUTING.md)

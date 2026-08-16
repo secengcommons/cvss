@@ -472,13 +472,18 @@ func TestInternalInvariantFailures(t *testing.T) {
 func TestMacroScoreTable(t *testing.T) {
 	t.Parallel()
 
-	if len(macroScores) != 270 {
-		t.Fatalf("macro score count = %d", len(macroScores))
-	}
+	count := 0
 	for key, score := range macroScores {
-		if key < 0 || score < 1 || score > 100 {
+		if score == 0 {
+			continue
+		}
+		count++
+		if score > 100 {
 			t.Fatalf("macro score %d = %d", key, score)
 		}
+	}
+	if count != 270 {
+		t.Fatalf("macro score count = %d", count)
 	}
 }
 
