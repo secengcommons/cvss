@@ -31,6 +31,9 @@ jobs:
         with:
           go-version: 1.26.6
           cache: true
+          cache-dependency-path: |
+            differential/go.sum
+            tools/go.sum
       - name: Verify Static Controls
         run: bash ./.github/scripts/verify.sh static
 
@@ -50,7 +53,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: 1.25.0
-          cache: true
+          cache: false
       - name: Verify Compatibility
         run: bash ./.github/scripts/verify.sh compatibility
 
@@ -70,7 +73,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: 1.26.6
-          cache: true
+          cache: false
       - name: Verify Behaviour
         run: bash ./.github/scripts/verify.sh test
 
@@ -98,7 +101,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: 1.26.6
-          cache: true
+          cache: false
       - name: Verify Platform Behaviour
         shell: bash
         run: bash ./.github/scripts/verify.sh platform
@@ -120,6 +123,7 @@ jobs:
         with:
           go-version: 1.26.6
           cache: true
+          cache-dependency-path: differential/go.sum
       - name: Run Fuzz Targets
         run: bash ./.github/scripts/verify.sh campaign
 
