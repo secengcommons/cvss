@@ -5,6 +5,7 @@ import "testing"
 var (
 	benchmarkVector Vector
 	benchmarkScore  Score
+	benchmarkText   string
 )
 
 func BenchmarkParseBase(b *testing.B) {
@@ -14,6 +15,17 @@ func BenchmarkParseBase(b *testing.B) {
 			b.Fatal(err)
 		}
 		benchmarkVector = vector
+	}
+}
+
+func BenchmarkString(b *testing.B) {
+	vector, err := ParseBase("CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:L")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		benchmarkText = vector.String()
 	}
 }
 

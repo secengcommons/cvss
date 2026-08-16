@@ -49,69 +49,68 @@ type Score struct {
 }
 
 func ParseBase(text string) (Vector, error) {
-	if !validText(text) {
+	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
 	}
-	parts := strings.Split(text, "/")
-	if parts[0] != "CVSS:4.0" {
+	const header = "CVSS:4.0/"
+	if !strings.HasPrefix(text, header) || strings.HasSuffix(text, "/") {
 		return Vector{}, ErrInvalidVector
 	}
-	for _, part := range parts[1:] {
-		name, _, found := strings.Cut(part, ":")
-		if found && optionalIndex(name) >= 0 {
+	vector, next, ok := parseRequired(text, len(header))
+	if !ok {
+		return Vector{}, ErrInvalidVector
+	}
+	if next < len(text) {
+		part, _, _ := nextPart(text, next)
+		colon := strings.IndexByte(part, ':')
+		if colon > 0 && optionalIndex(part[:colon]) >= 0 {
 			return Vector{}, ErrNonBaseVector
 		}
-	}
-	if len(parts) != len(metricNames)+1 {
 		return Vector{}, ErrInvalidVector
-	}
-	var vector Vector
-	for index, name := range metricNames {
-		metric, value, found := strings.Cut(parts[index+1], ":")
-		if !found || metric != name || len(value) != 1 || !strings.ContainsRune(metricValues[index], rune(value[0])) {
-			return Vector{}, ErrInvalidVector
-		}
-		vector.values[index] = value[0]
 	}
 	vector.valid = true
 	return vector, nil
 }
 
 func Parse(text string) (Vector, error) {
-	if !validText(text) {
+	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
 	}
-	parts := strings.Split(text, "/")
-	if len(parts) < len(metricNames)+1 || parts[0] != "CVSS:4.0" {
+	const header = "CVSS:4.0/"
+	if !strings.HasPrefix(text, header) {
 		return Vector{}, ErrInvalidVector
 	}
-	vector, ok := parseRequired(parts[1 : len(metricNames)+1])
-	if !ok || !parseOptional(&vector, parts[len(metricNames)+1:]) {
+	vector, next, ok := parseRequired(text, len(header))
+	if !ok || !parseOptional(&vector, text, next) {
 		return Vector{}, ErrInvalidVector
 	}
 	vector.valid = true
 	return vector, nil
 }
 
-func parseRequired(parts []string) (Vector, bool) {
+func parseRequired(text string, next int) (Vector, int, bool) {
 	var vector Vector
 	for index, name := range metricNames {
-		metric, value, found := strings.Cut(parts[index], ":")
-		if !found || metric != name || len(value) != 1 || !strings.ContainsRune(metricValues[index], rune(value[0])) {
-			return Vector{}, false
+		part, following, found := nextPart(text, next)
+		colon := strings.IndexByte(part, ':')
+		if !found || colon <= 0 || part[:colon] != name || colon != len(part)-2 || strings.IndexByte(metricValues[index], part[colon+1]) < 0 {
+			return Vector{}, 0, false
 		}
-		vector.values[index] = value[0]
+		vector.values[index] = part[colon+1]
+		next = following
 	}
-	return vector, true
+	return vector, next, true
 }
 
-func parseOptional(vector *Vector, parts []string) bool {
+func parseOptional(vector *Vector, text string, position int) bool {
 	next := 0
-	for _, part := range parts {
-		name, value, found := strings.Cut(part, ":")
-		if !found {
+	for position < len(text) {
+		part, following, found := nextPart(text, position)
+		colon := strings.IndexByte(part, ':')
+		if !found || colon <= 0 {
 			return false
 		}
+		name, value := part[:colon], part[colon+1:]
 		index := optionalIndex(name)
 		if index < next || index < 0 || !allowedOptional(index, value) {
 			return false
@@ -120,8 +119,19 @@ func parseOptional(vector *Vector, parts []string) bool {
 			vector.optional[index] = value
 		}
 		next = index + 1
+		position = following
 	}
-	return true
+	return !strings.HasSuffix(text, "/")
+}
+
+func nextPart(text string, start int) (string, int, bool) {
+	if start >= len(text) {
+		return "", start, false
+	}
+	if slash := strings.IndexByte(text[start:], '/'); slash >= 0 {
+		return text[start : start+slash], start + slash + 1, slash > 0
+	}
+	return text[start:], len(text), true
 }
 
 func (vector Vector) String() string {
@@ -129,7 +139,7 @@ func (vector Vector) String() string {
 		return ""
 	}
 	var text strings.Builder
-	text.Grow(63)
+	text.Grow(vector.textLength())
 	text.WriteString("CVSS:4.0")
 	for index, name := range metricNames {
 		text.WriteByte('/')
@@ -147,6 +157,19 @@ func (vector Vector) String() string {
 		text.WriteString(value)
 	}
 	return text.String()
+}
+
+func (vector Vector) textLength() int {
+	length := len("CVSS:4.0")
+	for _, name := range metricNames {
+		length += len(name) + 3
+	}
+	for index, value := range vector.optional {
+		if value != "" && value != "X" {
+			length += len(optionalNames[index]) + len(value) + 2
+		}
+	}
+	return length
 }
 
 // AppendText appends the canonical vector to text.
@@ -295,17 +318,7 @@ func (score Score) Severity() string {
 	}
 }
 
-func validText(text string) bool {
-	if len(text) == 0 || len(text) > maxVectorBytes {
-		return false
-	}
-	for index := range len(text) {
-		if text[index] < 0x21 || text[index] > 0x7e {
-			return false
-		}
-	}
-	return true
-}
+func validLength(text string) bool { return len(text) > 0 && len(text) <= maxVectorBytes }
 
 func optionalIndex(name string) int {
 	for index, candidate := range optionalNames {

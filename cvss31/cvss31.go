@@ -27,9 +27,10 @@ type Metric struct {
 }
 
 type Vector struct {
-	values   [8]byte
-	optional [14]byte
-	valid    bool
+	values     [8]byte
+	optional   [14]byte
+	baseTenths int
+	valid      bool
 }
 
 type Score struct {
@@ -49,22 +50,29 @@ func Parse(text string) (Vector, error) {
 }
 
 func parse(text string, complete bool) (Vector, error) {
-	if !validText(text) {
-		return Vector{}, ErrInvalidVector
-	}
-	parts := strings.Split(text, "/")
-	if parts[0] != "CVSS:3.1" {
+	const header = "CVSS:3.1/"
+	if !validLength(text) || !strings.HasPrefix(text, header) {
 		return Vector{}, ErrInvalidVector
 	}
 	vector := Vector{valid: true}
-	for _, part := range parts[1:] {
-		name, value, found := strings.Cut(part, ":")
-		if !found || len(value) != 1 || !setMetric(&vector, name, value[0], complete) {
+	remaining := text[len(header):]
+	for len(remaining) > 0 {
+		part := remaining
+		if slash := strings.IndexByte(remaining, '/'); slash >= 0 {
+			part, remaining = remaining[:slash], remaining[slash+1:]
+		} else {
+			remaining = ""
+		}
+		name, value, valid := parseMetric(part)
+		if !valid || !setMetric(&vector, name, value, complete) {
 			if !complete && optionalIndex(name) >= 0 {
 				return Vector{}, ErrNonBaseVector
 			}
 			return Vector{}, ErrInvalidVector
 		}
+	}
+	if strings.HasSuffix(text, "/") {
+		return Vector{}, ErrInvalidVector
 	}
 	for _, value := range vector.values {
 		if value == 0 {
@@ -72,7 +80,19 @@ func parse(text string, complete bool) (Vector, error) {
 		}
 	}
 	normaliseNotDefined(&vector.optional)
+	vector.baseTenths = baseScore(vector.values)
 	return vector, nil
+}
+
+func parseMetric(part string) (string, byte, bool) {
+	colon := strings.IndexByte(part, ':')
+	if colon <= 0 {
+		return part, 0, false
+	}
+	if colon != len(part)-2 {
+		return part[:colon], 0, false
+	}
+	return part[:colon], part[colon+1], true
 }
 
 func normaliseNotDefined(values *[14]byte) {
@@ -85,14 +105,14 @@ func normaliseNotDefined(values *[14]byte) {
 
 func setMetric(vector *Vector, name string, value byte, complete bool) bool {
 	if index := metricIndex(name); index >= 0 {
-		if vector.values[index] != 0 || !strings.ContainsRune(metricValues[index], rune(value)) {
+		if vector.values[index] != 0 || strings.IndexByte(metricValues[index], value) < 0 {
 			return false
 		}
 		vector.values[index] = value
 		return true
 	}
 	index := optionalIndex(name)
-	if !complete || index < 0 || vector.optional[index] != 0 || !strings.ContainsRune(optionalValues[index], rune(value)) {
+	if !complete || index < 0 || vector.optional[index] != 0 || strings.IndexByte(optionalValues[index], value) < 0 {
 		return false
 	}
 	vector.optional[index] = value
@@ -104,17 +124,44 @@ func (vector Vector) String() string {
 		return ""
 	}
 	var text strings.Builder
-	text.Grow(128)
-	text.WriteString("CVSS:3.1")
-	for index, name := range metricNames {
-		writeMetric(&text, name, vector.values[index])
-	}
+	text.Grow(vector.textLength())
+	writeBase(&text, "CVSS:3.1", vector.values)
 	for index, value := range vector.optional {
 		if value != 0 && value != 'X' {
 			writeMetric(&text, optionalNames[index], value)
 		}
 	}
 	return text.String()
+}
+
+func (vector Vector) textLength() int {
+	length := 44
+	for index, value := range vector.optional {
+		if value != 0 && value != 'X' {
+			length += len(optionalNames[index]) + 3
+		}
+	}
+	return length
+}
+
+func writeBase(text *strings.Builder, header string, values [8]byte) {
+	text.WriteString(header)
+	text.WriteString("/AV:")
+	text.WriteByte(values[0])
+	text.WriteString("/AC:")
+	text.WriteByte(values[1])
+	text.WriteString("/PR:")
+	text.WriteByte(values[2])
+	text.WriteString("/UI:")
+	text.WriteByte(values[3])
+	text.WriteString("/S:")
+	text.WriteByte(values[4])
+	text.WriteString("/C:")
+	text.WriteByte(values[5])
+	text.WriteString("/I:")
+	text.WriteByte(values[6])
+	text.WriteString("/A:")
+	text.WriteByte(values[7])
 }
 
 // AppendText appends the canonical vector to text.
@@ -177,14 +224,14 @@ func (vector Vector) BaseScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
 	}
-	return Score{tenths: baseScore(vector.values)}, nil
+	return Score{tenths: vector.baseTenths}, nil
 }
 
 func (vector Vector) TemporalScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
 	}
-	base := float64(baseScore(vector.values)) / 10
+	base := float64(vector.baseTenths) / 10
 	return Score{tenths: roundup(base * temporalWeight(vector.optional))}, nil
 }
 
@@ -413,23 +460,26 @@ func (score Score) Severity() string {
 	}
 }
 
-func validText(text string) bool {
-	if len(text) == 0 || len(text) > maxVectorBytes {
-		return false
-	}
-	for index := range len(text) {
-		if text[index] < 0x21 || text[index] > 0x7e {
-			return false
-		}
-	}
-	return true
-}
+func validLength(text string) bool { return len(text) > 0 && len(text) <= maxVectorBytes }
 
 func metricIndex(name string) int {
-	for index, candidate := range metricNames {
-		if name == candidate {
-			return index
-		}
+	switch name {
+	case "AV":
+		return 0
+	case "AC":
+		return 1
+	case "PR":
+		return 2
+	case "UI":
+		return 3
+	case "S":
+		return 4
+	case "C":
+		return 5
+	case "I":
+		return 6
+	case "A":
+		return 7
 	}
 	return -1
 }
@@ -444,9 +494,5 @@ func optionalIndex(name string) int {
 }
 
 func roundup(value float64) int {
-	scaled := math.Round(value * 100000)
-	if math.Mod(scaled, 10000) == 0 {
-		return int(scaled / 10000)
-	}
-	return int(math.Floor(scaled/10000) + 1)
+	return (int(math.Round(value*100000)) + 9999) / 10000
 }

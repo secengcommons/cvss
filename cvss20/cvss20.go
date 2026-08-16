@@ -28,9 +28,10 @@ type Metric struct {
 }
 
 type Vector struct {
-	values   [6]string
-	optional [8]string
-	valid    bool
+	values     [6]string
+	optional   [8]string
+	baseTenths int
+	valid      bool
 }
 
 type Score struct {
@@ -48,47 +49,53 @@ func ParseBase(text string) (Vector, error) {
 func Parse(text string) (Vector, error) { return parse(text, true) }
 
 func parse(text string, complete bool) (Vector, error) {
-	if !validText(text) {
+	if !validLength(text) {
 		return Vector{}, ErrInvalidVector
 	}
-	parts := strings.Split(text, "/")
-	if len(parts) < len(metricNames) {
-		return Vector{}, ErrInvalidVector
-	}
-	vector, ok := parseBase(parts[:len(metricNames)])
+	vector, next, ok := parseBase(text)
 	if !ok {
 		return Vector{}, ErrInvalidVector
 	}
-	if !complete && len(parts) > len(metricNames) {
-		name, _, found := strings.Cut(parts[len(metricNames)], ":")
-		if found && optionalIndex(name) >= 0 {
+	if !complete && next < len(text) {
+		part, _, _ := nextPart(text, next)
+		colon := strings.IndexByte(part, ':')
+		if colon > 0 && optionalIndex(part[:colon]) >= 0 {
 			return Vector{}, ErrNonBaseVector
 		}
 		return Vector{}, ErrInvalidVector
 	}
-	if !parseOptional(&vector, parts[len(metricNames):]) {
+	if !parseOptional(&vector, text, next) {
 		return Vector{}, ErrInvalidVector
 	}
+	vector.baseTenths = baseScore(vector.values)
 	vector.valid = true
 	return vector, nil
 }
 
-func parseBase(parts []string) (Vector, bool) {
+func parseBase(text string) (Vector, int, bool) {
 	var vector Vector
+	next := 0
 	for index, name := range metricNames {
-		metric, value, found := strings.Cut(parts[index], ":")
-		if !found || metric != name || !allowed(value, metricValues[index]) {
-			return Vector{}, false
+		part, following, found := nextPart(text, next)
+		colon := strings.IndexByte(part, ':')
+		if !found || colon <= 0 || part[:colon] != name || !allowed(part[colon+1:], metricValues[index]) {
+			return Vector{}, 0, false
 		}
-		vector.values[index] = value
+		vector.values[index] = part[colon+1:]
+		next = following
 	}
-	return vector, true
+	return vector, next, true
 }
 
-func parseOptional(vector *Vector, parts []string) bool {
+func parseOptional(vector *Vector, text string, position int) bool {
 	next := 0
-	for _, part := range parts {
-		name, value, found := strings.Cut(part, ":")
+	for position < len(text) {
+		part, following, found := nextPart(text, position)
+		colon := strings.IndexByte(part, ':')
+		if colon <= 0 {
+			return false
+		}
+		name, value := part[:colon], part[colon+1:]
 		index := optionalIndex(name)
 		if !found || index < next || index < 0 || !allowed(value, optionalValues[index]) {
 			return false
@@ -97,8 +104,19 @@ func parseOptional(vector *Vector, parts []string) bool {
 			vector.optional[index] = value
 		}
 		next = index + 1
+		position = following
 	}
-	return true
+	return !strings.HasSuffix(text, "/")
+}
+
+func nextPart(text string, start int) (string, int, bool) {
+	if start >= len(text) {
+		return "", start, false
+	}
+	if slash := strings.IndexByte(text[start:], '/'); slash >= 0 {
+		return text[start : start+slash], start + slash + 1, slash > 0
+	}
+	return text[start:], len(text), true
 }
 
 func allowed(value string, values []string) bool {
@@ -110,10 +128,36 @@ func (vector Vector) String() string {
 		return ""
 	}
 	var text strings.Builder
-	text.Grow(128)
-	writeMetrics(&text, metricNames[:], vector.values[:])
+	text.Grow(vector.textLength())
+	text.WriteString("AV:")
+	text.WriteString(vector.values[0])
+	text.WriteString("/AC:")
+	text.WriteString(vector.values[1])
+	text.WriteString("/Au:")
+	text.WriteString(vector.values[2])
+	text.WriteString("/C:")
+	text.WriteString(vector.values[3])
+	text.WriteString("/I:")
+	text.WriteString(vector.values[4])
+	text.WriteString("/A:")
+	text.WriteString(vector.values[5])
 	writeMetrics(&text, optionalNames[:], vector.optional[:])
 	return text.String()
+}
+
+func (vector Vector) textLength() int {
+	length := 20
+	for _, value := range vector.values {
+		length += len(value)
+	}
+	count := 6
+	for index, value := range vector.optional {
+		if value != "" {
+			length += len(optionalNames[index]) + len(value) + 1
+			count++
+		}
+	}
+	return length + count - 1
 }
 
 // AppendText appends the canonical vector to text.
@@ -183,14 +227,14 @@ func (vector Vector) BaseScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
 	}
-	return Score{tenths: baseScore(vector.values)}, nil
+	return Score{tenths: vector.baseTenths}, nil
 }
 
 func (vector Vector) TemporalScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
 	}
-	return Score{tenths: temporalScore(baseScore(vector.values), vector.optional)}, nil
+	return Score{tenths: temporalScore(vector.baseTenths, vector.optional)}, nil
 }
 
 func (vector Vector) EnvironmentalScore() (Score, error) {
@@ -380,23 +424,26 @@ func (score Score) String() string { return strconv.FormatFloat(score.Float64(),
 
 func round(value float64) int { return int(math.Floor(value*10 + .5)) }
 
-func validText(text string) bool {
-	if len(text) == 0 || len(text) > maxVectorBytes {
-		return false
-	}
-	for index := range len(text) {
-		if text[index] < 0x21 || text[index] > 0x7e {
-			return false
-		}
-	}
-	return true
-}
+func validLength(text string) bool { return len(text) > 0 && len(text) <= maxVectorBytes }
 
 func optionalIndex(name string) int {
-	for index, candidate := range optionalNames {
-		if name == candidate {
-			return index
-		}
+	switch name {
+	case "E":
+		return 0
+	case "RL":
+		return 1
+	case "RC":
+		return 2
+	case "CDP":
+		return 3
+	case "TD":
+		return 4
+	case "CR":
+		return 5
+	case "IR":
+		return 6
+	case "AR":
+		return 7
 	}
 	return -1
 }
