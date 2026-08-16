@@ -440,7 +440,7 @@ func TestScoreBoundaries(t *testing.T) {
 func TestRoundupUsesFiveDecimalIntermediate(t *testing.T) {
 	t.Parallel()
 
-	for input, want := range map[float64]int{4.0: 40, 4.000001: 40, 4.00001: 41, 4.099999: 41, 10: 100} {
+	for input, want := range map[float64]int{4.0: 40, 4.000001: 40, 4.000005: 41, 4.00001: 41, 4.099999: 41, 10: 100} {
 		if got := roundup(input); got != want {
 			t.Fatalf("roundup(%f) = %d, want %d", input, got, want)
 		}

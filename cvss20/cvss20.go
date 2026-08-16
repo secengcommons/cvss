@@ -3,7 +3,6 @@ package cvss20
 
 import (
 	"errors"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -337,7 +336,7 @@ func adjustedImpact(values [6]string, optional [8]string) float64 {
 	confidentiality := impactWeight(values[3]) * requirementWeight(optional[5])
 	integrity := impactWeight(values[4]) * requirementWeight(optional[6])
 	availability := impactWeight(values[5]) * requirementWeight(optional[7])
-	return math.Min(10, 10.41*(1-(1-confidentiality)*(1-integrity)*(1-availability)))
+	return clamp(10.41*(1-(1-confidentiality)*(1-integrity)*(1-availability)), 10)
 }
 
 func temporalScore(base int, optional [8]string) int {
@@ -474,7 +473,14 @@ func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 // String returns the score with one decimal place
 func (score Score) String() string { return strconv.FormatFloat(score.Float64(), 'f', 1, 64) }
 
-func round(value float64) int { return int(math.Floor(value*10 + .5)) }
+func round(value float64) int { return int(value*10 + .5) }
+
+func clamp(value, maximum float64) float64 {
+	if value > maximum {
+		return maximum
+	}
+	return value
+}
 
 func validLength(text string) bool { return len(text) > 0 && len(text) <= maxVectorBytes }
 

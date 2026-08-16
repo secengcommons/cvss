@@ -3,7 +3,6 @@ package cvss30
 
 import (
 	"errors"
-	"math"
 	"strconv"
 	"strings"
 )
@@ -290,7 +289,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 	if metrics[4] == 'C' {
 		raw *= 1.08
 	}
-	modifiedBase := float64(roundup(math.Min(raw, 10))) / 10
+	modifiedBase := float64(roundup(clamp(raw, 10))) / 10
 	return Score{tenths: roundup(modifiedBase * temporalWeight(vector.optional))}, nil
 }
 
@@ -335,7 +334,7 @@ func baseScore(metrics [8]byte) int {
 	if metrics[4] == 'C' {
 		raw *= 1.08
 	}
-	return roundup(math.Min(raw, 10))
+	return roundup(clamp(raw, 10))
 }
 
 func impact(metrics [8]byte) float64 {
@@ -350,7 +349,7 @@ func modifiedImpact(metrics [8]byte, optional [14]byte) float64 {
 	confidentiality := requirementWeight(optional[3]) * impactWeight(metrics[5])
 	integrity := requirementWeight(optional[4]) * impactWeight(metrics[6])
 	availability := requirementWeight(optional[5]) * impactWeight(metrics[7])
-	miss := math.Min(1-(1-confidentiality)*(1-integrity)*(1-availability), .915)
+	miss := clamp(1-(1-confidentiality)*(1-integrity)*(1-availability), .915)
 	if metrics[4] == 'C' {
 		return 7.52*(miss-.029) - 3.25*pow15(miss-.02)
 	}
@@ -598,5 +597,17 @@ func metricString(value byte) string {
 }
 
 func roundup(value float64) int {
-	return int(math.Ceil(value * 10))
+	scaled := value * 10
+	result := int(scaled)
+	if scaled > float64(result) {
+		result++
+	}
+	return result
+}
+
+func clamp(value, maximum float64) float64 {
+	if value > maximum {
+		return maximum
+	}
+	return value
 }

@@ -115,6 +115,16 @@ func BenchmarkImpact(b *testing.B) {
 	benchmarkFloat, benchmarkError = value, err
 }
 
+func BenchmarkEnvironmentalScore(b *testing.B) {
+	vector := mustParseBenchmark(b, "AV:N/AC:L/Au:N/C:N/I:N/A:C/E:F/RL:OF/RC:C/CDP:H/TD:H/CR:M/IR:M/AR:H")
+	var score Score
+	var err error
+	for b.Loop() {
+		score, err = vector.EnvironmentalScore()
+	}
+	benchmarkScore, benchmarkError = score, err
+}
+
 func BenchmarkMarshalJSON(b *testing.B) {
 	vector := mustParseBaseBenchmark(b)
 	var data []byte
