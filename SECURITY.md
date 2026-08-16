@@ -1,0 +1,1 @@
+Please report any genuine security issues you have discovered within the API via [GitHub Private vulnerability repotring](https://github.com/cticommons/cvss/security/advisories/new). If your report is in regard to the CVSS specification itself, please instead report to [FIRST](https://www.first.org/contact) directly

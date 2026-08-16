@@ -1,6 +1,8 @@
 module github.com/cticommons/cvss
 
-go 1.26.6
+go 1.25.0
+
+toolchain go1.26.6
 
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint

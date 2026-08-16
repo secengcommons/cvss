@@ -1,6 +1,6 @@
 {
   "owner": "Forum of Incident Response and Security Teams, Inc.",
-  "licence": "CVSS is used with permission from FIRST",
+  "licence": "CVSS is owned by FIRST and used by permission",
   "terms": "https://www.first.org/cvss/v4.0/specification-document#CVSS-License",
   "cvss_31_source": "https://www.first.org/cvss/v3.1/examples",
   "cvss_40_source": "https://www.first.org/cvss/v4.0/examples",

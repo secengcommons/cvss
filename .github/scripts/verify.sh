@@ -14,7 +14,7 @@ step() {
 
 require_toolchain() {
   local actual required
-  required=$(awk '$1 == "go" { print $2; exit }' go.mod)
+  required=$(awk '$1 == "toolchain" { sub(/^go/, "", $2); print $2; exit }' go.mod)
   actual=$(go env GOVERSION)
   actual=${actual#go}
   if [[ -z "$required" || "$actual" != "$required" ]]; then
@@ -88,7 +88,7 @@ coverage_self_test() (
   cat >"$fixture/go.mod" <<'EOF'
 module coverage.test/probe
 
-go 1.26.6
+go 1.25.0
 EOF
   cat >"$fixture/probe/probe.go" <<'EOF'
 package probe
@@ -119,9 +119,9 @@ modernisation_self_test() (
   cat >"$fixture/go.mod" <<'EOF'
 module modernisation.test/probe
 
-go 1.26.6
+go 1.25.0
 EOF
-  cp -- "$repository_root/tools/testdata/go-modernisation.go.txt" "$fixture/probe.go"
+  cp -- "$repository_root/testdata/verification/go-modernisation.go.txt" "$fixture/probe.go"
   output=$fixture/result.out
   if run_go_fix "$fixture" >"$output" 2>&1; then
     printf 'Go fix self-test accepted legacy source.\n' >&2
@@ -223,6 +223,11 @@ run_tests() {
   step 'Go Race' go test -race -count=1 -shuffle=on ./...
 }
 
+run_compatibility() {
+  cd -- "$repository_root"
+  step 'Go 1.25 Compatibility' env GOTOOLCHAIN=go1.25.0 go test -count=1 -shuffle=on ./...
+}
+
 run_campaign() {
   local found package packages target targets
   cd -- "$repository_root"
@@ -244,10 +249,11 @@ run_campaign() {
 }
 
 case "${1:-}" in
-  all) run_static; run_tests; run_campaign ;;
+  all) run_static; run_compatibility; run_tests; run_campaign ;;
   static) run_static ;;
+  compatibility) run_compatibility ;;
   test) run_tests ;;
   campaign) run_campaign ;;
   self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test ;;
-  *) printf 'Usage: %s all|static|test|campaign|self-test\n' "${0##*/}" >&2; exit 2 ;;
+  *) printf 'Usage: %s all|static|compatibility|test|campaign|self-test\n' "${0##*/}" >&2; exit 2 ;;
 esac
