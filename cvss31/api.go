@@ -65,12 +65,7 @@ func (vector *Vector) UnmarshalText(text []byte) error {
 	if vector == nil || len(text) == 0 || len(text) > maxVectorBytes {
 		return ErrInvalidVector
 	}
-	parsed, err := Parse(string(text))
-	if err != nil {
-		return err
-	}
-	*vector = parsed
-	return nil
+	return unmarshal(vector, string(text))
 }
 
 // UnmarshalJSON replaces the receiver only after complete JSON string and vector validation
@@ -82,5 +77,17 @@ func (vector *Vector) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &text); err != nil {
 		return ErrInvalidVector
 	}
-	return vector.UnmarshalText([]byte(text))
+	return unmarshal(vector, text)
+}
+
+func unmarshal(vector *Vector, text string) error {
+	if len(text) == 0 || len(text) > maxVectorBytes {
+		return ErrInvalidVector
+	}
+	parsed, err := Parse(text)
+	if err != nil {
+		return err
+	}
+	*vector = parsed
+	return nil
 }
