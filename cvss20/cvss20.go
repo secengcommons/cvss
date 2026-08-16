@@ -26,7 +26,6 @@ const (
 )
 
 var (
-	// ErrInvalidVector reports malformed, incomplete or unsupported CVSS 2.0 content
 	ErrInvalidVector = errors.New("invalid CVSS 2.0 vector")
 	// ErrNonBaseVector reports optional metrics passed to ParseBase
 	ErrNonBaseVector = errors.New("CVSS 2.0 vector contains non-Base metrics")
@@ -308,7 +307,6 @@ func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
 // Valid reports whether the vector was constructed by a validated operation
 func (vector Vector) Valid() bool { return vector.valid }
 
-// BaseScore returns the specification Base score
 func (vector Vector) BaseScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -316,7 +314,6 @@ func (vector Vector) BaseScore() (Score, error) {
 	return Score{tenths: vector.baseTenths}, nil
 }
 
-// TemporalScore returns the specification Temporal score
 func (vector Vector) TemporalScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -324,7 +321,6 @@ func (vector Vector) TemporalScore() (Score, error) {
 	return Score{tenths: temporalScore(vector.baseTenths, vector.optional)}, nil
 }
 
-// EnvironmentalScore returns the specification Environmental score
 func (vector Vector) EnvironmentalScore() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -505,10 +501,8 @@ func requirementWeight(value byte) float64 {
 	}
 }
 
-// Tenths returns the exact integer tenths representation
 func (score Score) Tenths() int { return score.tenths }
 
-// Float64 returns the score as a decimal value
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
 // AppendText appends the score with one decimal place

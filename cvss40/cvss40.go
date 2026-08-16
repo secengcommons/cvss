@@ -31,7 +31,6 @@ const (
 )
 
 var (
-	// ErrInvalidVector reports malformed, incomplete or unsupported CVSS 4.0 content
 	ErrInvalidVector = errors.New("invalid CVSS 4.0 vector")
 	// ErrNonBaseVector reports optional metrics passed to ParseBase
 	ErrNonBaseVector = errors.New("CVSS 4.0 vector contains non-Base metrics")
@@ -297,7 +296,6 @@ func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
 	return metrics
 }
 
-// Nomenclature returns the defined CVSS 4.0 metric-group nomenclature
 func (vector Vector) Nomenclature() string {
 	if !vector.valid {
 		return ""
@@ -324,7 +322,6 @@ func (vector Vector) Valid() bool {
 	return vector.valid
 }
 
-// Score returns the CVSS 4.0 score
 func (vector Vector) Score() (Score, error) {
 	if !vector.valid {
 		return Score{}, ErrInvalidVector
@@ -378,10 +375,8 @@ func (vector Vector) effective() scoringValues {
 	return values
 }
 
-// Tenths returns the exact integer tenths representation
 func (score Score) Tenths() int { return score.tenths }
 
-// Float64 returns the score as a decimal value
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
 // AppendText appends the score with one decimal place
