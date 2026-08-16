@@ -3,6 +3,7 @@ package cvss30
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -52,6 +53,28 @@ func TestMetricReplacement(t *testing.T) {
 	}
 	if _, err := (Vector{}).WithMetric(Metric{Name: "AC", Value: "L"}); !errors.Is(err, ErrInvalidVector) {
 		t.Fatalf("zero WithMetric error = %v", err)
+	}
+}
+
+func TestAppendOptionalMetrics(t *testing.T) {
+	vector, err := Parse("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:F/RL:O")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefix := Metric{Name: "prefix", Value: "retained"}
+	got, err := vector.AppendOptionalMetrics(append(make([]Metric, 0, 3), prefix))
+	want := []Metric{prefix, {Name: "E", Value: "F"}, {Name: "RL", Value: "O"}}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("AppendOptionalMetrics = %#v, %v", got, err)
+	}
+	grown, err := vector.AppendOptionalMetrics(nil)
+	if err != nil || !slices.Equal(grown, want[1:]) {
+		t.Fatalf("growing AppendOptionalMetrics = %#v, %v", grown, err)
+	}
+	original := []Metric{prefix}
+	got, err = (Vector{}).AppendOptionalMetrics(original)
+	if !errors.Is(err, ErrInvalidVector) || !slices.Equal(got, original) {
+		t.Fatalf("zero AppendOptionalMetrics = %#v, %v", got, err)
 	}
 }
 

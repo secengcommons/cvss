@@ -246,7 +246,18 @@ func (vector Vector) OptionalMetrics() []Metric {
 	if count == 0 {
 		return nil
 	}
-	metrics := make([]Metric, 0, count)
+	return vector.appendOptionalMetrics(make([]Metric, 0, count))
+}
+
+// AppendOptionalMetrics appends defined optional metrics in preferred order
+func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
+	if !vector.valid {
+		return metrics, ErrInvalidVector
+	}
+	return vector.appendOptionalMetrics(metrics), nil
+}
+
+func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
 	for index, value := range vector.optional {
 		if value != 0 && value != 'X' {
 			metrics = append(metrics, Metric{Name: optionalNames[index], Value: metricString(value)})

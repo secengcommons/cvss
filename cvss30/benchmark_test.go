@@ -25,6 +25,14 @@ func BenchmarkParseBase(b *testing.B) {
 	benchmarkVector = vector
 }
 
+func BenchmarkParseInvalid(b *testing.B) {
+	var err error
+	for b.Loop() {
+		_, err = Parse("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:X")
+	}
+	benchmarkError = err
+}
+
 func BenchmarkString(b *testing.B) {
 	vector, err := ParseBase("CVSS:3.0/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:L")
 	if err != nil {
@@ -86,6 +94,33 @@ func BenchmarkMetric(b *testing.B) {
 	benchmarkMetric = metric
 }
 
+func BenchmarkMetrics(b *testing.B) {
+	vector := mustParseBaseBenchmark(b)
+	var metrics [8]Metric
+	for b.Loop() {
+		metrics = vector.Metrics()
+	}
+	_ = metrics
+}
+
+func BenchmarkScoreFormatting(b *testing.B) {
+	vector := mustParseBaseBenchmark(b)
+	score, err := vector.Score()
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Run("String", func(b *testing.B) {
+		for b.Loop() {
+			benchmarkText = score.String()
+		}
+	})
+	b.Run("Severity", func(b *testing.B) {
+		for b.Loop() {
+			benchmarkText = score.Severity()
+		}
+	})
+}
+
 func BenchmarkOptionalMetrics(b *testing.B) {
 	vector := mustParseBenchmark(b, "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:F")
 	var metrics []Metric
@@ -93,6 +128,16 @@ func BenchmarkOptionalMetrics(b *testing.B) {
 		metrics = vector.OptionalMetrics()
 	}
 	benchmarkMetrics = metrics
+}
+
+func BenchmarkAppendOptionalMetrics(b *testing.B) {
+	vector := mustParseBenchmark(b, "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:F")
+	metrics := make([]Metric, 0, 1)
+	var err error
+	for b.Loop() {
+		metrics, err = vector.AppendOptionalMetrics(metrics[:0])
+	}
+	benchmarkMetrics, benchmarkError = metrics, err
 }
 
 func BenchmarkWithMetric(b *testing.B) {

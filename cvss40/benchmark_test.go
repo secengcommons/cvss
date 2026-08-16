@@ -24,6 +24,14 @@ func BenchmarkParseBase(b *testing.B) {
 	benchmarkVector = vector
 }
 
+func BenchmarkParseInvalid(b *testing.B) {
+	var err error
+	for b.Loop() {
+		_, err = Parse("CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:X")
+	}
+	benchmarkError = err
+}
+
 func BenchmarkString(b *testing.B) {
 	vector, err := ParseBase("CVSS:4.0/AV:N/AC:L/AT:N/PR:H/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N")
 	if err != nil {
@@ -77,12 +85,46 @@ func BenchmarkAppendText(b *testing.B) {
 }
 
 func BenchmarkMetric(b *testing.B) {
-	vector := mustParseBaseBenchmark(b, "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N")
+	vector := mustParseBaseBenchmark(b)
 	var metric Metric
 	for b.Loop() {
 		metric, _ = vector.Metric("AC")
 	}
 	benchmarkMetric = metric
+}
+
+func BenchmarkMetrics(b *testing.B) {
+	vector := mustParseBaseBenchmark(b)
+	var metrics [11]Metric
+	for b.Loop() {
+		metrics = vector.Metrics()
+	}
+	_ = metrics
+}
+
+func BenchmarkScoreFormatting(b *testing.B) {
+	vector := mustParseBaseBenchmark(b)
+	score, err := vector.Score()
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Run("String", func(b *testing.B) {
+		for b.Loop() {
+			benchmarkText = score.String()
+		}
+	})
+	b.Run("Severity", func(b *testing.B) {
+		for b.Loop() {
+			benchmarkText = score.Severity()
+		}
+	})
+}
+
+func BenchmarkNomenclature(b *testing.B) {
+	vector := mustParseBenchmark(b, "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:A")
+	for b.Loop() {
+		benchmarkText = vector.Nomenclature()
+	}
 }
 
 func BenchmarkOptionalMetrics(b *testing.B) {
@@ -94,8 +136,18 @@ func BenchmarkOptionalMetrics(b *testing.B) {
 	benchmarkMetrics = metrics
 }
 
+func BenchmarkAppendOptionalMetrics(b *testing.B) {
+	vector := mustParseBenchmark(b, "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:A")
+	metrics := make([]Metric, 0, 1)
+	var err error
+	for b.Loop() {
+		metrics, err = vector.AppendOptionalMetrics(metrics[:0])
+	}
+	benchmarkMetrics, benchmarkError = metrics, err
+}
+
 func BenchmarkWithMetric(b *testing.B) {
-	vector := mustParseBaseBenchmark(b, "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N")
+	vector := mustParseBaseBenchmark(b)
 	var replaced Vector
 	var err error
 	for b.Loop() {
@@ -105,7 +157,7 @@ func BenchmarkWithMetric(b *testing.B) {
 }
 
 func BenchmarkMarshalJSON(b *testing.B) {
-	vector := mustParseBaseBenchmark(b, "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N")
+	vector := mustParseBaseBenchmark(b)
 	var data []byte
 	var err error
 	for b.Loop() {
@@ -123,9 +175,9 @@ func mustParseBenchmark(b *testing.B, text string) Vector {
 	return vector
 }
 
-func mustParseBaseBenchmark(b *testing.B, text string) Vector {
+func mustParseBaseBenchmark(b *testing.B) Vector {
 	b.Helper()
-	vector, err := ParseBase(text)
+	vector, err := ParseBase("CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N")
 	if err != nil {
 		b.Fatal(err)
 	}

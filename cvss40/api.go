@@ -14,7 +14,7 @@ func (vector Vector) Metric(name string) (Metric, bool) {
 		return Metric{Name: name, Value: metricString(vector.values[index])}, true
 	}
 	if index := optionalIndex(name); index >= 0 && defined(vector.optional[index]) {
-		return Metric{Name: name, Value: vector.optional[index]}, true
+		return Metric{Name: name, Value: optionalValue(index, vector.optional[index])}, true
 	}
 	return Metric{}, false
 }
@@ -32,13 +32,11 @@ func (vector Vector) WithMetric(metric Metric) (Vector, error) {
 		return vector, nil
 	}
 	index := optionalIndex(metric.Name)
-	if index < 0 || !allowedOptional(index, metric.Value) {
+	code, valid := optionalCode(index, metric.Value)
+	if !valid {
 		return Vector{}, ErrInvalidVector
 	}
-	if metric.Value == "X" {
-		metric.Value = ""
-	}
-	vector.optional[index] = metric.Value
+	vector.optional[index] = code
 	return vector, nil
 }
 

@@ -187,7 +187,8 @@ func TestEveryOptionalValueScores(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse(%q): %v", text, err)
 			}
-			wantBase, wantTemporal, wantEnvironmental := independentScores(vector.values, vector.optional)
+			baseValues, optionalValues := independentValues(vector)
+			wantBase, wantTemporal, wantEnvironmental := independentScores(baseValues, optionalValues)
 			assertScore(t, vector.BaseScore, wantBase)
 			assertScore(t, vector.TemporalScore, wantTemporal)
 			assertScore(t, vector.EnvironmentalScore, wantEnvironmental)
@@ -233,6 +234,12 @@ func TestZeroValueFailsClosed(t *testing.T) {
 		if _, err := calculate(); !errors.Is(err, ErrInvalidVector) {
 			t.Fatalf("score error = %v", err)
 		}
+	}
+}
+
+func TestInvalidStoredMetricCode(t *testing.T) {
+	if got := metricString('?'); got != "" {
+		t.Fatalf("metricString(?) = %q", got)
 	}
 }
 
@@ -389,6 +396,20 @@ func independentScores(base [6]string, optional [8]string) (float64, float64, fl
 	distribution := map[string]float64{"N": 0, "L": .25, "M": .75, "H": 1, "": 1}[optional[4]]
 	environmental := independentRound((adjustedTemporal + (10-adjustedTemporal)*damage) * distribution)
 	return baseScore, temporal, environmental
+}
+
+func independentValues(vector Vector) ([6]string, [8]string) {
+	var base [6]string
+	for index, metric := range vector.Metrics() {
+		base[index] = metric.Value
+	}
+	var optional [8]string
+	for index, name := range optionalNames {
+		if metric, ok := vector.Metric(name); ok {
+			optional[index] = metric.Value
+		}
+	}
+	return base, optional
 }
 
 func independentRound(value float64) float64 {

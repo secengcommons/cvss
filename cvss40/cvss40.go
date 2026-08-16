@@ -46,7 +46,7 @@ type Metric struct {
 // The zero value is invalid
 type Vector struct {
 	values   [11]byte
-	optional [21]string
+	optional [21]byte
 	valid    bool
 }
 
@@ -97,18 +97,32 @@ func Parse(text string) (Vector, error) {
 	return vector, nil
 }
 
-func parseRequired(text string, next int) (Vector, int, bool) {
+func parseRequired(text string, position int) (Vector, int, bool) {
 	var vector Vector
 	for index, name := range metricNames {
-		part, following, found := nextPart(text, next)
-		colon := strings.IndexByte(part, ':')
-		if !found || colon <= 0 || part[:colon] != name || colon != len(part)-2 || strings.IndexByte(metricValues[index], part[colon+1]) < 0 {
+		if index > 0 {
+			if position >= len(text) || text[position] != '/' {
+				return Vector{}, 0, false
+			}
+			position++
+		}
+		if position+len(name)+2 > len(text) || text[position:position+len(name)] != name || text[position+len(name)] != ':' {
 			return Vector{}, 0, false
 		}
-		vector.values[index] = part[colon+1]
-		next = following
+		value := text[position+len(name)+1]
+		if strings.IndexByte(metricValues[index], value) < 0 {
+			return Vector{}, 0, false
+		}
+		vector.values[index] = value
+		position += len(name) + 2
 	}
-	return vector, next, true
+	if position < len(text) {
+		if text[position] != '/' {
+			return Vector{}, 0, false
+		}
+		position++
+	}
+	return vector, position, true
 }
 
 func parseOptional(vector *Vector, text string, position int) bool {
@@ -121,12 +135,11 @@ func parseOptional(vector *Vector, text string, position int) bool {
 		}
 		name, value := part[:colon], part[colon+1:]
 		index := optionalIndex(name)
-		if index < next || index < 0 || !allowedOptional(index, value) {
+		code, valid := optionalCode(index, value)
+		if index < next || !valid {
 			return false
 		}
-		if value != "X" {
-			vector.optional[index] = value
-		}
+		vector.optional[index] = code
 		next = index + 1
 		position = following
 	}
@@ -134,9 +147,6 @@ func parseOptional(vector *Vector, text string, position int) bool {
 }
 
 func nextPart(text string, start int) (string, int, bool) {
-	if start >= len(text) {
-		return "", start, false
-	}
 	if slash := strings.IndexByte(text[start:], '/'); slash >= 0 {
 		return text[start : start+slash], start + slash + 1, slash > 0
 	}
@@ -158,13 +168,13 @@ func (vector Vector) String() string {
 		text.WriteByte(vector.values[index])
 	}
 	for index, value := range vector.optional {
-		if value == "" || value == "X" {
+		if !defined(value) {
 			continue
 		}
 		text.WriteByte('/')
 		text.WriteString(optionalNames[index])
 		text.WriteByte(':')
-		text.WriteString(value)
+		text.WriteString(optionalValue(index, value))
 	}
 	return text.String()
 }
@@ -175,8 +185,8 @@ func (vector Vector) textLength() int {
 		length += len(name) + 3
 	}
 	for index, value := range vector.optional {
-		if value != "" && value != "X" {
-			length += len(optionalNames[index]) + len(value) + 2
+		if defined(value) {
+			length += len(optionalNames[index]) + len(optionalValue(index, value)) + 2
 		}
 	}
 	return length
@@ -218,7 +228,7 @@ func (vector Vector) appendText(text []byte) []byte {
 		text = append(text, '/')
 		text = append(text, optionalNames[index]...)
 		text = append(text, ':')
-		text = append(text, value...)
+		text = append(text, optionalValue(index, value)...)
 	}
 	return text
 }
@@ -249,10 +259,21 @@ func (vector Vector) OptionalMetrics() []Metric {
 	if count == 0 {
 		return nil
 	}
-	metrics := make([]Metric, 0, count)
+	return vector.appendOptionalMetrics(make([]Metric, 0, count))
+}
+
+// AppendOptionalMetrics appends defined optional metrics in mandatory order
+func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
+	if !vector.valid {
+		return metrics, ErrInvalidVector
+	}
+	return vector.appendOptionalMetrics(metrics), nil
+}
+
+func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
 	for index, value := range vector.optional {
-		if value != "" && value != "X" {
-			metrics = append(metrics, Metric{Name: optionalNames[index], Value: value})
+		if defined(value) {
+			metrics = append(metrics, Metric{Name: optionalNames[index], Value: optionalValue(index, value)})
 		}
 	}
 	return metrics
@@ -296,7 +317,7 @@ func (vector Vector) Score() (Score, error) {
 	}
 	eq := equivalence(effective)
 	current := macroScore(eq)
-	lower := lowerScores(eq, current)
+	lower := lowerScores(eq)
 	distance := severityDistances(effective, eq)
 	reduction := 0.0
 	for index, scoreDifference := range lower.differences {
@@ -322,16 +343,16 @@ type scoringValues struct {
 func (vector Vector) effective() scoringValues {
 	values := scoringValues{metrics: vector.values, exploitation: 'A', requirements: [3]byte{'H', 'H', 'H'}}
 	if defined(vector.optional[0]) {
-		values.exploitation = vector.optional[0][0]
+		values.exploitation = optionalValue(0, vector.optional[0])[0]
 	}
 	for index := range 3 {
 		if defined(vector.optional[index+1]) {
-			values.requirements[index] = vector.optional[index+1][0]
+			values.requirements[index] = optionalValue(index+1, vector.optional[index+1])[0]
 		}
 	}
 	for index := range 11 {
 		if defined(vector.optional[index+4]) {
-			values.metrics[index] = vector.optional[index+4][0]
+			values.metrics[index] = optionalValue(index+4, vector.optional[index+4])[0]
 		}
 	}
 	return values
@@ -438,10 +459,6 @@ func optionalIndex3(name string) int {
 	return -1
 }
 
-func allowedOptional(index int, value string) bool {
-	return slices.Contains(optionalValues[index], value)
-}
-
 func metricString(value byte) string {
 	if value >= 'A' && value <= 'Z' {
 		return metricStrings[value-'A']
@@ -449,7 +466,24 @@ func metricString(value byte) string {
 	return ""
 }
 
-func defined(value string) bool { return value != "" && value != "X" }
+func defined(value byte) bool { return value != 0 }
+
+func optionalCode(index int, value string) (byte, bool) {
+	if index < 0 {
+		return 0, false
+	}
+	code := slices.Index(optionalValues[index], value)
+	switch code {
+	case 0, 1, 2, 3, 4:
+		return [...]byte{0, 1, 2, 3, 4}[code], true
+	default:
+		return 0, false
+	}
+}
+
+func optionalValue(index int, code byte) string {
+	return optionalValues[index][code]
+}
 
 func noImpact(values [11]byte) bool {
 	for _, value := range values[5:] {
@@ -532,12 +566,15 @@ func equivalence6(values [11]byte, requirements [3]byte) int {
 }
 
 func macroScore(eq macroVector) int {
-	index := (((((eq[0]*2+eq[1])*3+eq[2])*3+eq[3])*3+eq[4])*2 + eq[5])
-	score := macroScores[index]
+	score := macroScores[macroIndex(eq)]
 	if score == 0 {
 		panic("missing CVSS 4.0 macro score")
 	}
 	return score
+}
+
+func macroIndex(eq macroVector) int {
+	return (((((eq[0]*2+eq[1])*3+eq[2])*3+eq[3])*3+eq[4])*2 + eq[5])
 }
 
 type scoreDifferences struct {
@@ -545,7 +582,35 @@ type scoreDifferences struct {
 	count       int
 }
 
-func lowerScores(eq macroVector, current int) scoreDifferences {
+var lowerScoreTable = buildLowerScoreTable()
+
+func lowerScores(eq macroVector) scoreDifferences {
+	return lowerScoreTable[macroIndex(eq)]
+}
+
+func buildLowerScoreTable() [len(macroScores)]scoreDifferences {
+	var table [len(macroScores)]scoreDifferences
+	for eq0 := range 3 {
+		for eq1 := range 2 {
+			for eq2 := range 3 {
+				for eq3 := range 3 {
+					for eq4 := range 3 {
+						for eq5 := range 2 {
+							eq := macroVector{eq0, eq1, eq2, eq3, eq4, eq5}
+							current := macroScores[macroIndex(eq)]
+							if current != 0 {
+								table[macroIndex(eq)] = calculateLowerScores(eq, current)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return table
+}
+
+func calculateLowerScores(eq macroVector, current int) scoreDifferences {
 	var result scoreDifferences
 	for _, index := range []int{0, 1, 3, 4} {
 		limits := [...]int{2, 1, 0, 2, 2}

@@ -8,10 +8,10 @@ func (vector Vector) Metric(name string) (Metric, bool) {
 		return Metric{}, false
 	}
 	if index := baseMetricIndex(name); index >= 0 {
-		return Metric{Name: name, Value: vector.values[index]}, true
+		return Metric{Name: name, Value: metricString(vector.values[index])}, true
 	}
-	if index := optionalIndex(name); index >= 0 && vector.optional[index] != "" {
-		return Metric{Name: name, Value: vector.optional[index]}, true
+	if index := optionalIndex(name); index >= 0 && vector.optional[index] != 0 {
+		return Metric{Name: name, Value: optionalValue(index, vector.optional[index])}, true
 	}
 	return Metric{}, false
 }
@@ -25,18 +25,16 @@ func (vector Vector) WithMetric(metric Metric) (Vector, error) {
 		if !allowed(metric.Value, metricValues[index]) {
 			return Vector{}, ErrInvalidVector
 		}
-		vector.values[index] = metric.Value
+		vector.values[index] = metric.Value[0]
 		vector.baseTenths = baseScore(vector.values)
 		return vector, nil
 	}
 	index := optionalIndex(metric.Name)
-	if index < 0 || !allowed(metric.Value, optionalValues[index]) {
+	code, valid := optionalCode(index, metric.Value)
+	if !valid {
 		return Vector{}, ErrInvalidVector
 	}
-	if metric.Value == "ND" {
-		metric.Value = ""
-	}
-	vector.optional[index] = metric.Value
+	vector.optional[index] = code
 	return vector, nil
 }
 

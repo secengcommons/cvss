@@ -21,6 +21,7 @@ var metricNames = [...]string{"AV", "AC", "Au", "C", "I", "A"}
 var metricValues = [...][]string{{"L", "A", "N"}, {"H", "M", "L"}, {"M", "S", "N"}, {"N", "P", "C"}, {"N", "P", "C"}, {"N", "P", "C"}}
 var optionalNames = [...]string{"E", "RL", "RC", "CDP", "TD", "CR", "IR", "AR"}
 var optionalValues = [...][]string{{"U", "POC", "F", "H", "ND"}, {"OF", "TF", "W", "U", "ND"}, {"UC", "UR", "C", "ND"}, {"N", "L", "LM", "MH", "H", "ND"}, {"N", "L", "M", "H", "ND"}, {"L", "M", "H", "ND"}, {"L", "M", "H", "ND"}, {"L", "M", "H", "ND"}}
+var metricStrings = [26]string{0: "A", 2: "C", 7: "H", 11: "L", 12: "M", 13: "N", 15: "P", 18: "S"}
 
 // Metric is one canonical CVSS 2.0 metric name and value
 type Metric struct {
@@ -32,8 +33,8 @@ type Metric struct {
 //
 // The zero value is invalid
 type Vector struct {
-	values     [6]string
-	optional   [8]string
+	values     [6]byte
+	optional   [8]byte
 	baseTenths int
 	valid      bool
 }
@@ -81,17 +82,31 @@ func parse(text string, complete bool) (Vector, error) {
 
 func parseBase(text string) (Vector, int, bool) {
 	var vector Vector
-	next := 0
+	position := 0
 	for index, name := range metricNames {
-		part, following, found := nextPart(text, next)
-		colon := strings.IndexByte(part, ':')
-		if !found || colon <= 0 || part[:colon] != name || !allowed(part[colon+1:], metricValues[index]) {
+		if index > 0 {
+			if position >= len(text) || text[position] != '/' {
+				return Vector{}, 0, false
+			}
+			position++
+		}
+		if position+len(name)+2 > len(text) || text[position:position+len(name)] != name || text[position+len(name)] != ':' {
 			return Vector{}, 0, false
 		}
-		vector.values[index] = part[colon+1:]
-		next = following
+		value := text[position+len(name)+1]
+		if !allowedByte(value, metricValues[index]) {
+			return Vector{}, 0, false
+		}
+		vector.values[index] = value
+		position += len(name) + 2
 	}
-	return vector, next, true
+	if position < len(text) {
+		if text[position] != '/' {
+			return Vector{}, 0, false
+		}
+		position++
+	}
+	return vector, position, true
 }
 
 func parseOptional(vector *Vector, text string, position int) bool {
@@ -104,12 +119,11 @@ func parseOptional(vector *Vector, text string, position int) bool {
 		}
 		name, value := part[:colon], part[colon+1:]
 		index := optionalIndex(name)
-		if !found || index < next || index < 0 || !allowed(value, optionalValues[index]) {
+		code, valid := optionalCode(index, value)
+		if !found || index < next || index < 0 || !valid {
 			return false
 		}
-		if value != "ND" {
-			vector.optional[index] = value
-		}
+		vector.optional[index] = code
 		next = index + 1
 		position = following
 	}
@@ -117,9 +131,6 @@ func parseOptional(vector *Vector, text string, position int) bool {
 }
 
 func nextPart(text string, start int) (string, int, bool) {
-	if start >= len(text) {
-		return "", start, false
-	}
 	if slash := strings.IndexByte(text[start:], '/'); slash >= 0 {
 		return text[start : start+slash], start + slash + 1, slash > 0
 	}
@@ -130,6 +141,15 @@ func allowed(value string, values []string) bool {
 	return slices.Contains(values, value)
 }
 
+func allowedByte(value byte, values []string) bool {
+	for _, candidate := range values {
+		if candidate[0] == value {
+			return true
+		}
+	}
+	return false
+}
+
 // String returns the canonical vector or an empty string for an invalid vector
 func (vector Vector) String() string {
 	if !vector.valid {
@@ -138,30 +158,28 @@ func (vector Vector) String() string {
 	var text strings.Builder
 	text.Grow(vector.textLength())
 	text.WriteString("AV:")
-	text.WriteString(vector.values[0])
+	text.WriteByte(vector.values[0])
 	text.WriteString("/AC:")
-	text.WriteString(vector.values[1])
+	text.WriteByte(vector.values[1])
 	text.WriteString("/Au:")
-	text.WriteString(vector.values[2])
+	text.WriteByte(vector.values[2])
 	text.WriteString("/C:")
-	text.WriteString(vector.values[3])
+	text.WriteByte(vector.values[3])
 	text.WriteString("/I:")
-	text.WriteString(vector.values[4])
+	text.WriteByte(vector.values[4])
 	text.WriteString("/A:")
-	text.WriteString(vector.values[5])
-	writeMetrics(&text, optionalNames[:], vector.optional[:])
+	text.WriteByte(vector.values[5])
+	writeMetrics(&text, vector.optional)
 	return text.String()
 }
 
 func (vector Vector) textLength() int {
 	length := 20
-	for _, value := range vector.values {
-		length += len(value)
-	}
+	length += len(vector.values)
 	count := 6
 	for index, value := range vector.optional {
-		if value != "" {
-			length += len(optionalNames[index]) + len(value) + 1
+		if value != 0 {
+			length += len(optionalNames[index]) + len(optionalValue(index, value)) + 1
 			count++
 		}
 	}
@@ -192,40 +210,40 @@ func (vector Vector) MarshalJSON() ([]byte, error) {
 
 func (vector Vector) appendText(text []byte) []byte {
 	text = append(text, "AV:"...)
-	text = append(text, vector.values[0]...)
+	text = append(text, vector.values[0])
 	text = append(text, "/AC:"...)
-	text = append(text, vector.values[1]...)
+	text = append(text, vector.values[1])
 	text = append(text, "/Au:"...)
-	text = append(text, vector.values[2]...)
+	text = append(text, vector.values[2])
 	text = append(text, "/C:"...)
-	text = append(text, vector.values[3]...)
+	text = append(text, vector.values[3])
 	text = append(text, "/I:"...)
-	text = append(text, vector.values[4]...)
+	text = append(text, vector.values[4])
 	text = append(text, "/A:"...)
-	text = append(text, vector.values[5]...)
+	text = append(text, vector.values[5])
 	for index, value := range vector.optional {
-		if value == "" {
+		if value == 0 {
 			continue
 		}
 		text = append(text, '/')
 		text = append(text, optionalNames[index]...)
 		text = append(text, ':')
-		text = append(text, value...)
+		text = append(text, optionalValue(index, value)...)
 	}
 	return text
 }
 
-func writeMetrics(text *strings.Builder, names, values []string) {
+func writeMetrics(text *strings.Builder, values [8]byte) {
 	for index, value := range values {
-		if value == "" {
+		if value == 0 {
 			continue
 		}
 		if text.Len() > 0 {
 			text.WriteByte('/')
 		}
-		text.WriteString(names[index])
+		text.WriteString(optionalNames[index])
 		text.WriteByte(':')
-		text.WriteString(value)
+		text.WriteString(optionalValue(index, value))
 	}
 }
 
@@ -236,7 +254,7 @@ func (vector Vector) Metrics() [6]Metric {
 		return metrics
 	}
 	for index, name := range metricNames {
-		metrics[index] = Metric{Name: name, Value: vector.values[index]}
+		metrics[index] = Metric{Name: name, Value: metricString(vector.values[index])}
 	}
 	return metrics
 }
@@ -248,17 +266,28 @@ func (vector Vector) OptionalMetrics() []Metric {
 	}
 	count := 0
 	for _, value := range vector.optional {
-		if value != "" {
+		if value != 0 {
 			count++
 		}
 	}
 	if count == 0 {
 		return nil
 	}
-	metrics := make([]Metric, 0, count)
+	return vector.appendOptionalMetrics(make([]Metric, 0, count))
+}
+
+// AppendOptionalMetrics appends defined optional metrics in specification order
+func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
+	if !vector.valid {
+		return metrics, ErrInvalidVector
+	}
+	return vector.appendOptionalMetrics(metrics), nil
+}
+
+func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
 	for index, value := range vector.optional {
-		if value != "" {
-			metrics = append(metrics, Metric{Name: optionalNames[index], Value: value})
+		if value != 0 {
+			metrics = append(metrics, Metric{Name: optionalNames[index], Value: optionalValue(index, value)})
 		}
 	}
 	return metrics
@@ -291,7 +320,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 	adjusted := adjustedImpact(vector.values, vector.optional)
 	adjustedBase := baseFromImpact(vector.values, adjusted)
 	adjustedTemporal := temporalScore(adjustedBase, vector.optional)
-	value := (float64(adjustedTemporal)/10 + (10-float64(adjustedTemporal)/10)*damageWeight(vector.optional[3])) * distributionWeight(vector.optional[4])
+	value := (float64(adjustedTemporal)/10 + (10-float64(adjustedTemporal)/10)*damageWeight(optionalValue(3, vector.optional[3]))) * distributionWeight(optionalValue(4, vector.optional[4]))
 	return Score{tenths: round(value)}, nil
 }
 
@@ -309,18 +338,18 @@ func (vector Vector) Score() (Score, error) {
 	return vector.BaseScore()
 }
 
-func hasDefined(values []string) bool {
+func hasDefined(values []byte) bool {
 	for _, value := range values {
-		if value != "" {
+		if value != 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func baseScore(values [6]string) int { return baseFromImpact(values, impact(values)) }
+func baseScore(values [6]byte) int { return baseFromImpact(values, impact(values)) }
 
-func baseFromImpact(values [6]string, impactValue float64) int {
+func baseFromImpact(values [6]byte, impactValue float64) int {
 	if impactValue == 0 {
 		return 0
 	}
@@ -328,60 +357,60 @@ func baseFromImpact(values [6]string, impactValue float64) int {
 	return round(((.6 * impactValue) + (.4 * exploitability) - 1.5) * 1.176)
 }
 
-func impact(values [6]string) float64 {
+func impact(values [6]byte) float64 {
 	return 10.41 * (1 - (1-impactWeight(values[3]))*(1-impactWeight(values[4]))*(1-impactWeight(values[5])))
 }
 
-func adjustedImpact(values [6]string, optional [8]string) float64 {
-	confidentiality := impactWeight(values[3]) * requirementWeight(optional[5])
-	integrity := impactWeight(values[4]) * requirementWeight(optional[6])
-	availability := impactWeight(values[5]) * requirementWeight(optional[7])
+func adjustedImpact(values [6]byte, optional [8]byte) float64 {
+	confidentiality := impactWeight(values[3]) * requirementWeight(optionalValue(5, optional[5]))
+	integrity := impactWeight(values[4]) * requirementWeight(optionalValue(6, optional[6]))
+	availability := impactWeight(values[5]) * requirementWeight(optionalValue(7, optional[7]))
 	return clamp(10.41*(1-(1-confidentiality)*(1-integrity)*(1-availability)), 10)
 }
 
-func temporalScore(base int, optional [8]string) int {
-	value := float64(base) / 10 * exploitWeight(optional[0]) * remediationWeight(optional[1]) * confidenceWeight(optional[2])
+func temporalScore(base int, optional [8]byte) int {
+	value := float64(base) / 10 * exploitWeight(optionalValue(0, optional[0])) * remediationWeight(optionalValue(1, optional[1])) * confidenceWeight(optionalValue(2, optional[2]))
 	return round(value)
 }
 
-func accessWeight(value string) float64 {
+func accessWeight(value byte) float64 {
 	switch value {
-	case "L":
+	case 'L':
 		return .395
-	case "A":
+	case 'A':
 		return .646
 	default:
 		return 1
 	}
 }
 
-func complexityWeight(value string) float64 {
+func complexityWeight(value byte) float64 {
 	switch value {
-	case "H":
+	case 'H':
 		return .35
-	case "M":
+	case 'M':
 		return .61
 	default:
 		return .71
 	}
 }
 
-func authenticationWeight(value string) float64 {
+func authenticationWeight(value byte) float64 {
 	switch value {
-	case "M":
+	case 'M':
 		return .45
-	case "S":
+	case 'S':
 		return .56
 	default:
 		return .704
 	}
 }
 
-func impactWeight(value string) float64 {
+func impactWeight(value byte) float64 {
 	switch value {
-	case "P":
+	case 'P':
 		return .275
-	case "C":
+	case 'C':
 		return .66
 	default:
 		return 0
@@ -504,4 +533,33 @@ func optionalIndex(name string) int {
 		return 7
 	}
 	return -1
+}
+
+func optionalCode(index int, value string) (byte, bool) {
+	if index < 0 {
+		return 0, false
+	}
+	for code, allowedValue := range optionalValues[index] {
+		if value == allowedValue {
+			if value == "ND" {
+				return 0, true
+			}
+			return byte(code + 1), true
+		}
+	}
+	return 0, false
+}
+
+func optionalValue(index int, code byte) string {
+	if code == 0 {
+		return ""
+	}
+	return optionalValues[index][code-1]
+}
+
+func metricString(value byte) string {
+	if value >= 'A' && value <= 'Z' {
+		return metricStrings[value-'A']
+	}
+	return ""
 }

@@ -25,6 +25,14 @@ func BenchmarkParseBase(b *testing.B) {
 	benchmarkVector = vector
 }
 
+func BenchmarkParseInvalid(b *testing.B) {
+	var err error
+	for b.Loop() {
+		_, err = Parse("AV:N/AC:L/Au:N/C:C/I:C/A:X")
+	}
+	benchmarkError = err
+}
+
 func BenchmarkString(b *testing.B) {
 	vector, err := ParseBase("AV:N/AC:H/Au:S/C:C/I:N/A:P")
 	if err != nil {
@@ -86,6 +94,15 @@ func BenchmarkMetric(b *testing.B) {
 	benchmarkMetric = metric
 }
 
+func BenchmarkMetrics(b *testing.B) {
+	vector := mustParseBaseBenchmark(b)
+	var metrics [6]Metric
+	for b.Loop() {
+		metrics = vector.Metrics()
+	}
+	_ = metrics
+}
+
 func BenchmarkOptionalMetrics(b *testing.B) {
 	vector := mustParseBenchmark(b, "AV:N/AC:L/Au:N/C:C/I:C/A:C/E:F")
 	var metrics []Metric
@@ -93,6 +110,16 @@ func BenchmarkOptionalMetrics(b *testing.B) {
 		metrics = vector.OptionalMetrics()
 	}
 	benchmarkMetrics = metrics
+}
+
+func BenchmarkAppendOptionalMetrics(b *testing.B) {
+	vector := mustParseBenchmark(b, "AV:N/AC:L/Au:N/C:C/I:C/A:C/E:F")
+	metrics := make([]Metric, 0, 1)
+	var err error
+	for b.Loop() {
+		metrics, err = vector.AppendOptionalMetrics(metrics[:0])
+	}
+	benchmarkMetrics, benchmarkError = metrics, err
 }
 
 func BenchmarkWithMetric(b *testing.B) {
