@@ -278,6 +278,36 @@ func TestScoreRepresentation(t *testing.T) {
 	}
 }
 
+func TestCanonicalEncoding(t *testing.T) {
+	t.Parallel()
+
+	vector, err := Parse("AV:N/AC:L/Au:N/C:C/I:C/A:C")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	text, err := vector.MarshalText()
+	if err != nil || string(text) != vector.String() {
+		t.Fatalf("MarshalText = %q, %v", text, err)
+	}
+	appended, err := vector.AppendText([]byte("vector="))
+	if err != nil || string(appended) != "vector="+vector.String() {
+		t.Fatalf("AppendText = %q, %v", appended, err)
+	}
+	encoded, err := json.Marshal(vector)
+	if err != nil || string(encoded) != fmt.Sprintf("%q", vector.String()) {
+		t.Fatalf("MarshalJSON = %s, %v", encoded, err)
+	}
+	if _, err := (Vector{}).MarshalText(); !errors.Is(err, ErrInvalidVector) {
+		t.Fatalf("zero MarshalText error = %v", err)
+	}
+	if _, err := (Vector{}).AppendText([]byte("prefix")); !errors.Is(err, ErrInvalidVector) {
+		t.Fatalf("zero AppendText error = %v", err)
+	}
+	if _, err := json.Marshal(Vector{}); err == nil {
+		t.Fatal("zero vector encoded as JSON")
+	}
+}
+
 func FuzzParse(f *testing.F) {
 	f.Add("AV:N/AC:L/Au:N/C:C/I:C/A:C/E:F/RL:OF/RC:C/CDP:H/TD:H/CR:M/IR:M/AR:H")
 	f.Add("")

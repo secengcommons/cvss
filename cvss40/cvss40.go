@@ -1,6 +1,7 @@
 package cvss40
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"slices"
@@ -146,6 +147,26 @@ func (vector Vector) String() string {
 		text.WriteString(value)
 	}
 	return text.String()
+}
+
+// AppendText appends the canonical vector to text.
+func (vector Vector) AppendText(text []byte) ([]byte, error) {
+	if !vector.valid {
+		return text, ErrInvalidVector
+	}
+	return append(text, vector.String()...), nil
+}
+
+// MarshalText returns the canonical vector.
+func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(nil) }
+
+// MarshalJSON returns the canonical vector as a JSON string.
+func (vector Vector) MarshalJSON() ([]byte, error) {
+	text, err := vector.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(text))
 }
 
 func (vector Vector) Metrics() [11]Metric {
