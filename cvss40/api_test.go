@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"testing"
+
+	"github.com/cticommons/cvss/internal/vectorinput"
 )
 
 func TestMetricLookup(t *testing.T) {
@@ -137,22 +139,11 @@ func assertDecodeBounds(t *testing.T, source string, before Vector) {
 		t.Fatalf("nil JSON receiver error = %v", err)
 	}
 	decoded := before
-	if err := decoded.UnmarshalText(make([]byte, maxVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
+	if err := decoded.UnmarshalText(make([]byte, vectorinput.MaxTextBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
 		t.Fatalf("oversized text changed receiver: %v", err)
 	}
-	if err := decoded.UnmarshalJSON(make([]byte, maxJSONVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
+	if err := decoded.UnmarshalJSON(make([]byte, vectorinput.MaxJSONBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
 		t.Fatalf("oversized JSON changed receiver: %v", err)
-	}
-}
-
-func TestMetricStringAlphabet(t *testing.T) {
-	for _, value := range []byte("AHLNP") {
-		if metricString(value) == "" {
-			t.Fatalf("metricString(%q) is empty", value)
-		}
-	}
-	if metricString('?') != "" {
-		t.Fatal("unknown metric byte accepted")
 	}
 }
 

@@ -2,41 +2,22 @@ package cvss31
 
 import (
 	"errors"
-	"strings"
+
+	"github.com/cticommons/cvss/internal/cvss3"
+	"github.com/cticommons/cvss/internal/metricvalue"
+	scoretext "github.com/cticommons/cvss/internal/score"
+	"github.com/cticommons/cvss/internal/vectorinput"
 )
 
 const (
-	prefix             = "CVSS:3.1"
-	header             = prefix + "/"
-	maxVectorBytes     = 256
-	maxJSONVectorBytes = maxVectorBytes*len(`\u00ff`) + len(`""`)
-
-	attackVectorIndex               = 0
-	attackComplexityIndex           = 1
-	privilegesIndex                 = 2
-	userInteractionIndex            = 3
-	scopeIndex                      = 4
-	confidentialityIndex            = 5
-	integrityIndex                  = 6
-	availabilityIndex               = 7
-	temporalMetricCount             = 3
-	confidentialityRequirementIndex = 3
-	integrityRequirementIndex       = 4
-	availabilityRequirementIndex    = 5
-	modifiedMetricStart             = 6
+	prefix = "CVSS:3.1"
+	header = prefix + "/"
 )
 
 var (
 	ErrInvalidVector = errors.New("invalid CVSS 3.1 vector")
-	// Returned when ParseBase receives optional metrics
 	ErrNonBaseVector = errors.New("CVSS 3.1 vector contains non-Base metrics")
 )
-
-var metricNames = [...]string{"AV", "AC", "PR", "UI", "S", "C", "I", "A"}
-var metricValues = [...]string{"NALP", "LH", "NLH", "NR", "UC", "HLN", "HLN", "HLN"}
-var optionalNames = [...]string{"E", "RL", "RC", "CR", "IR", "AR", "MAV", "MAC", "MPR", "MUI", "MS", "MC", "MI", "MA"}
-var optionalValues = [...]string{"XUPFH", "XUWTO", "XCRU", "XHML", "XHML", "XHML", "XNALP", "XLH", "XNLH", "XNR", "XUC", "XHLN", "XHLN", "XHLN"}
-var metricStrings = [26]string{0: "A", 2: "C", 5: "F", 7: "H", 11: "L", 12: "M", 13: "N", 14: "O", 15: "P", 17: "R", 19: "T", 20: "U", 22: "W"}
 
 type Metric struct {
 	Name  string
@@ -45,7 +26,7 @@ type Metric struct {
 
 // The zero value is invalid
 type Vector struct {
-	state [5]byte
+	state cvss3.State
 }
 
 // Stored in exact tenths
@@ -55,143 +36,23 @@ type Score struct {
 
 // Accepts metrics in any order
 func ParseBase(text string) (Vector, error) {
-	vector, err := parse(text, false)
-	if err != nil {
-		return Vector{}, err
+	parsed, valid := cvss3.Parse(text, header)
+	if !valid {
+		return Vector{}, ErrInvalidVector
 	}
-	return vector, nil
+	if parsed.HasOptional {
+		return Vector{}, ErrNonBaseVector
+	}
+	return Vector{state: parsed.State}, nil
 }
 
 // Accepts metrics in any order
 func Parse(text string) (Vector, error) {
-	return parse(text, true)
-}
-
-func parse(text string, complete bool) (Vector, error) {
-	if !validLength(text) || !strings.HasPrefix(text, header) {
+	parsed, valid := cvss3.Parse(text, header)
+	if !valid {
 		return Vector{}, ErrInvalidVector
 	}
-	builder, err := parseValues(text, complete)
-	if err != nil {
-		return Vector{}, err
-	}
-	if strings.HasSuffix(text, "/") {
-		return Vector{}, ErrInvalidVector
-	}
-	if builder.baseSeen != 1<<len(metricNames)-1 {
-		return Vector{}, ErrInvalidVector
-	}
-	return builder.vector(), nil
-}
-
-func parseValues(text string, complete bool) (stateBuilder, error) {
-	builder, position, ordered := parseOrderedBase(text, len(header))
-	if ordered && !complete {
-		if err := parseMetrics(&builder, text[position:], false); err != nil {
-			return stateBuilder{}, err
-		}
-		return builder, nil
-	}
-	if ordered {
-		candidate := builder
-		if parseOrderedOptional(&candidate, text, position) {
-			return candidate, nil
-		}
-	}
-	var flexible stateBuilder
-	err := parseMetrics(&flexible, text[len(header):], complete)
-	return flexible, err
-}
-
-func parseOrderedOptional(builder *stateBuilder, text string, position int) bool {
-	for index, name := range optionalNames {
-		if position == len(text) {
-			return true
-		}
-		if position+len(name)+2 > len(text) || text[position:position+len(name)] != name || text[position+len(name)] != ':' {
-			continue
-		}
-		value := text[position+len(name)+1]
-		if !builder.setOptional(index, value) {
-			return false
-		}
-		position += len(name) + 2
-		if position < len(text) {
-			if text[position] != '/' {
-				return false
-			}
-			position++
-		}
-	}
-	return position == len(text)
-}
-
-func parseOrderedBase(text string, position int) (stateBuilder, int, bool) {
-	var builder stateBuilder
-	for index, name := range metricNames {
-		if index > 0 {
-			if position >= len(text) || text[position] != '/' {
-				return stateBuilder{}, 0, false
-			}
-			position++
-		}
-		if position+len(name)+2 > len(text) || text[position:position+len(name)] != name || text[position+len(name)] != ':' {
-			return stateBuilder{}, 0, false
-		}
-		value := text[position+len(name)+1]
-		if !builder.setBase(index, value) {
-			return stateBuilder{}, 0, false
-		}
-		position += len(name) + 2
-	}
-	if position < len(text) {
-		if text[position] != '/' {
-			return stateBuilder{}, 0, false
-		}
-		position++
-	}
-	return builder, position, true
-}
-
-func parseMetrics(builder *stateBuilder, remaining string, complete bool) error {
-	for len(remaining) > 0 {
-		part := remaining
-		if slash := strings.IndexByte(remaining, '/'); slash >= 0 {
-			part, remaining = remaining[:slash], remaining[slash+1:]
-		} else {
-			remaining = ""
-		}
-		name, value, valid := parseMetric(part)
-		if !valid || !setMetric(builder, name, value, complete) {
-			if !complete && optionalIndex(name) >= 0 {
-				return ErrNonBaseVector
-			}
-			return ErrInvalidVector
-		}
-	}
-	return nil
-}
-
-func parseMetric(part string) (string, byte, bool) {
-	colon := strings.IndexByte(part, ':')
-	if colon <= 0 {
-		return part, 0, false
-	}
-	if colon != len(part)-2 {
-		return part[:colon], 0, false
-	}
-	return part[:colon], part[colon+1], true
-}
-
-func setMetric(builder *stateBuilder, name string, value byte, complete bool) bool {
-	if index := metricIndex(name); index >= 0 {
-		return builder.setBase(index, value)
-	}
-	index := optionalIndex(name)
-	if !complete || index < 0 || strings.IndexByte(optionalValues[index], value) < 0 {
-		return false
-	}
-	return builder.setOptional(index, value)
+	return Vector{state: parsed.State}, nil
 }
 
 // Invalid vectors produce an empty string
@@ -199,47 +60,8 @@ func (vector Vector) String() string {
 	if !vector.Valid() {
 		return ""
 	}
-	decoded := vector.decode()
-	var text strings.Builder
-	text.Grow(vector.textLength())
-	writeBase(&text, prefix, decoded.values)
-	for index, value := range decoded.optional {
-		if value != 0 && value != 'X' {
-			writeMetric(&text, optionalNames[index], value)
-		}
-	}
-	return text.String()
-}
-
-func (vector Vector) textLength() int {
-	decoded := vector.decode()
-	length := len(prefix + "/AV:X/AC:X/PR:X/UI:X/S:X/C:X/I:X/A:X")
-	for index, value := range decoded.optional {
-		if value != 0 && value != 'X' {
-			length += len(optionalNames[index]) + 3
-		}
-	}
-	return length
-}
-
-func writeBase(text *strings.Builder, header string, values [8]byte) {
-	text.WriteString(header)
-	text.WriteString("/AV:")
-	text.WriteByte(values[0])
-	text.WriteString("/AC:")
-	text.WriteByte(values[1])
-	text.WriteString("/PR:")
-	text.WriteByte(values[2])
-	text.WriteString("/UI:")
-	text.WriteByte(values[3])
-	text.WriteString("/S:")
-	text.WriteByte(values[4])
-	text.WriteString("/C:")
-	text.WriteByte(values[5])
-	text.WriteString("/I:")
-	text.WriteByte(values[6])
-	text.WriteString("/A:")
-	text.WriteByte(values[7])
+	var buffer [vectorinput.MaxTextBytes]byte
+	return string(cvss3.AppendText(buffer[:0], prefix, vector.state))
 }
 
 // Output is canonical
@@ -247,7 +69,7 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.Valid() {
 		return text, ErrInvalidVector
 	}
-	return vector.appendText(text), nil
+	return cvss3.AppendText(text, prefix, vector.state), nil
 }
 
 // Output is canonical
@@ -258,36 +80,10 @@ func (vector Vector) MarshalJSON() ([]byte, error) {
 	if !vector.Valid() {
 		return nil, ErrInvalidVector
 	}
-	text := make([]byte, 1, vector.textLength()+2)
+	text := make([]byte, 1, cvss3.TextLength(prefix, vector.state)+2)
 	text[0] = '"'
-	text = vector.appendText(text)
+	text = cvss3.AppendText(text, prefix, vector.state)
 	return append(text, '"'), nil
-}
-
-func (vector Vector) appendText(text []byte) []byte {
-	decoded := vector.decode()
-	text = append(text, prefix...)
-	for index, name := range metricNames {
-		text = append(text, '/')
-		text = append(text, name...)
-		text = append(text, ':', decoded.values[index])
-	}
-	for index, value := range decoded.optional {
-		if value == 0 {
-			continue
-		}
-		text = append(text, '/')
-		text = append(text, optionalNames[index]...)
-		text = append(text, ':', value)
-	}
-	return text
-}
-
-func writeMetric(text *strings.Builder, name string, value byte) {
-	text.WriteByte('/')
-	text.WriteString(name)
-	text.WriteByte(':')
-	text.WriteByte(value)
 }
 
 // Preferred order
@@ -297,8 +93,8 @@ func (vector Vector) Metrics() [8]Metric {
 		return metrics
 	}
 	decoded := vector.decode()
-	for index, name := range metricNames {
-		metrics[index] = Metric{Name: name, Value: metricString(decoded.values[index])}
+	for index, value := range decoded.values {
+		metrics[index] = Metric{Name: cvss3.BaseName(index), Value: metricvalue.String(value)}
 	}
 	return metrics
 }
@@ -311,14 +107,14 @@ func (vector Vector) OptionalMetrics() []Metric {
 	decoded := vector.decode()
 	count := 0
 	for _, value := range decoded.optional {
-		if value != 0 && value != 'X' {
+		if value != 0 {
 			count++
 		}
 	}
 	if count == 0 {
 		return nil
 	}
-	return vector.appendOptionalMetrics(make([]Metric, 0, count))
+	return appendOptionalMetrics(make([]Metric, 0, count), decoded)
 }
 
 // Appended in preferred order
@@ -326,21 +122,20 @@ func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
 	if !vector.Valid() {
 		return metrics, ErrInvalidVector
 	}
-	return vector.appendOptionalMetrics(metrics), nil
+	return appendOptionalMetrics(metrics, vector.decode()), nil
 }
 
-func (vector Vector) appendOptionalMetrics(metrics []Metric) []Metric {
-	for index, value := range vector.decode().optional {
-		if value != 0 && value != 'X' {
-			metrics = append(metrics, Metric{Name: optionalNames[index], Value: metricString(value)})
+func appendOptionalMetrics(metrics []Metric, decoded decodedVector) []Metric {
+	for index, value := range decoded.optional {
+		if value != 0 {
+			metrics = append(metrics, Metric{Name: cvss3.OptionalName(index), Value: metricvalue.String(value)})
 		}
 	}
 	return metrics
 }
 
 // True only for vectors produced by validated operations
-func (vector Vector) Valid() bool { return vector.state != [5]byte{} }
-
+func (vector Vector) Valid() bool { return vector.state.Valid() }
 func (vector Vector) BaseScore() (Score, error) {
 	if !vector.Valid() {
 		return Score{}, ErrInvalidVector
@@ -353,25 +148,28 @@ func (vector Vector) TemporalScore() (Score, error) {
 		return Score{}, ErrInvalidVector
 	}
 	base := float64(vector.baseTenths()) / 10
-	return Score{tenths: roundup(base * temporalWeight(vector.decode().optional))}, nil
+	return Score{tenths: roundup(base * cvss3.TemporalWeight(vector.decode().optional))}, nil
 }
 
 func (vector Vector) EnvironmentalScore() (Score, error) {
 	if !vector.Valid() {
 		return Score{}, ErrInvalidVector
 	}
-	decoded := vector.decode()
-	metrics := modifiedMetrics(decoded)
+	return environmentalScore(vector.decode()), nil
+}
+
+func environmentalScore(decoded decodedVector) Score {
+	metrics := cvss3.ModifiedMetrics(cvss3.Decoded{Values: decoded.values, Optional: decoded.optional})
 	impact := modifiedImpact(metrics, decoded.optional)
 	if impact <= 0 {
-		return Score{}, nil
+		return Score{}
 	}
-	raw := impact + exploitability(metrics)
-	if metrics[scopeIndex] == 'C' {
+	raw := impact + cvss3.Exploitability(metrics)
+	if metrics[cvss3.ScopeIndex] == 'C' {
 		raw *= 1.08
 	}
-	modifiedBase := float64(roundup(clamp(raw, 10))) / 10
-	return Score{tenths: roundup(modifiedBase * temporalWeight(decoded.optional))}, nil
+	modifiedBase := float64(roundup(cvss3.Clamp(raw, 10))) / 10
+	return Score{tenths: roundup(modifiedBase * cvss3.TemporalWeight(decoded.optional))}
 }
 
 // Uses the highest score group containing a defined metric
@@ -379,29 +177,21 @@ func (vector Vector) Score() (Score, error) {
 	if !vector.Valid() {
 		return Score{}, ErrInvalidVector
 	}
-	if vector.hasEnvironmental() {
-		return vector.EnvironmentalScore()
+	decoded := vector.decode()
+	if hasDefined(decoded.optional[cvss3.TemporalMetricCount:]) {
+		return environmentalScore(decoded), nil
 	}
-	if vector.hasTemporal() {
-		return vector.TemporalScore()
+	if hasDefined(decoded.optional[:cvss3.TemporalMetricCount]) {
+		base := float64(vector.baseTenths()) / 10
+		return Score{tenths: roundup(base * cvss3.TemporalWeight(decoded.optional))}, nil
 	}
-	return vector.BaseScore()
+	return Score{tenths: vector.baseTenths()}, nil
 }
 
-func (vector Vector) hasTemporal() bool {
-	optional := vector.decode().optional
-	for _, value := range optional[:temporalMetricCount] {
-		if value != 0 && value != 'X' {
-			return true
-		}
-	}
-	return false
-}
-
-func (vector Vector) hasEnvironmental() bool {
-	optional := vector.decode().optional
-	for _, value := range optional[temporalMetricCount:] {
-		if value != 0 && value != 'X' {
+// Kept local because cross-package group selection measurably slows Score
+func hasDefined(optional []byte) bool {
+	for _, value := range optional {
+		if value != 0 && value != cvss3.UndefinedValue {
 			return true
 		}
 	}
@@ -409,173 +199,15 @@ func (vector Vector) hasEnvironmental() bool {
 }
 
 func baseScore(metrics [8]byte) int {
-	impact := impact(metrics)
+	impact := cvss3.Impact(metrics)
 	if impact <= 0 {
 		return 0
 	}
-	raw := impact + exploitability(metrics)
-	if metrics[scopeIndex] == 'C' {
+	raw := impact + cvss3.Exploitability(metrics)
+	if metrics[cvss3.ScopeIndex] == 'C' {
 		raw *= 1.08
 	}
-	return roundup(clamp(raw, 10))
-}
-
-func impact(metrics [8]byte) float64 {
-	iss := 1 - (1-impactWeight(metrics[confidentialityIndex]))*(1-impactWeight(metrics[integrityIndex]))*(1-impactWeight(metrics[availabilityIndex]))
-	if metrics[scopeIndex] == 'C' {
-		return 7.52*(iss-.029) - 3.25*pow15(iss-.02)
-	}
-	return 6.42 * iss
-}
-
-func modifiedImpact(metrics [8]byte, optional [14]byte) float64 {
-	confidentiality := requirementWeight(optional[confidentialityRequirementIndex]) * impactWeight(metrics[confidentialityIndex])
-	integrity := requirementWeight(optional[integrityRequirementIndex]) * impactWeight(metrics[integrityIndex])
-	availability := requirementWeight(optional[availabilityRequirementIndex]) * impactWeight(metrics[availabilityIndex])
-	miss := clamp(1-(1-confidentiality)*(1-integrity)*(1-availability), .915)
-	if metrics[scopeIndex] == 'C' {
-		return 7.52*(miss-.029) - 3.25*pow13(miss*.9731-.02)
-	}
-	return 6.42 * miss
-}
-
-func exploitability(metrics [8]byte) float64 {
-	av := attackVectorWeight(metrics[attackVectorIndex])
-	ac := attackComplexityWeight(metrics[attackComplexityIndex])
-	pr := privilegesWeight(metrics[privilegesIndex], metrics[scopeIndex])
-	ui := userInteractionWeight(metrics[userInteractionIndex])
-	return 8.22 * av * ac * pr * ui
-}
-
-func pow13(value float64) float64 {
-	squared := value * value
-	fourth := squared * squared
-	eighth := fourth * fourth
-	return eighth * fourth * value
-}
-
-func pow15(value float64) float64 {
-	squared := value * value
-	fourth := squared * squared
-	eighth := fourth * fourth
-	return eighth * fourth * squared * value
-}
-
-func attackVectorWeight(value byte) float64 {
-	switch value {
-	case 'N':
-		return .85
-	case 'A':
-		return .62
-	case 'L':
-		return .55
-	default:
-		return .2
-	}
-}
-
-func attackComplexityWeight(value byte) float64 {
-	if value == 'L' {
-		return .77
-	}
-	return .44
-}
-
-func userInteractionWeight(value byte) float64 {
-	if value == 'N' {
-		return .85
-	}
-	return .62
-}
-
-func privilegesWeight(value, scope byte) float64 {
-	if value == 'N' {
-		return .85
-	}
-	if scope == 'C' {
-		if value == 'L' {
-			return .68
-		}
-		return .5
-	}
-	if value == 'L' {
-		return .62
-	}
-	return .27
-}
-
-func impactWeight(value byte) float64 {
-	switch value {
-	case 'H':
-		return .56
-	case 'L':
-		return .22
-	default:
-		return 0
-	}
-}
-
-func requirementWeight(value byte) float64 {
-	switch value {
-	case 'H':
-		return 1.5
-	case 'L':
-		return .5
-	default:
-		return 1
-	}
-}
-
-func temporalWeight(optional [14]byte) float64 {
-	return exploitCodeWeight(optional[0]) * remediationWeight(optional[1]) * confidenceWeight(optional[2])
-}
-
-func exploitCodeWeight(value byte) float64 {
-	switch value {
-	case 'U':
-		return .91
-	case 'P':
-		return .94
-	case 'F':
-		return .97
-	default:
-		return 1
-	}
-}
-
-func remediationWeight(value byte) float64 {
-	switch value {
-	case 'O':
-		return .95
-	case 'T':
-		return .96
-	case 'W':
-		return .97
-	default:
-		return 1
-	}
-}
-
-func confidenceWeight(value byte) float64 {
-	switch value {
-	case 'U':
-		return .92
-	case 'R':
-		return .96
-	default:
-		return 1
-	}
-}
-
-func modifiedMetrics(decoded decodedVector) [8]byte {
-	metrics := decoded.values
-	for index := range 8 {
-		value := decoded.optional[index+modifiedMetricStart]
-		if value != 0 && value != 'X' {
-			metrics[index] = value
-		}
-	}
-	return metrics
+	return roundup(cvss3.Clamp(raw, 10))
 }
 
 func (score Score) Tenths() int { return score.tenths }
@@ -584,113 +216,14 @@ func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
 // One decimal place
 func (score Score) AppendText(text []byte) []byte {
-	if score.tenths == 100 {
-		return append(text, "10.0"...)
-	}
-	return append(text, "0123456789"[score.tenths/10], '.', "0123456789"[score.tenths%10])
+	return scoretext.AppendText(text, score.tenths)
 }
 
 // One decimal place
-func (score Score) String() string { return string(score.AppendText(make([]byte, 0, 4))) }
+func (score Score) String() string { return scoretext.String(score.tenths) }
 
 // Specification rating in uppercase
-func (score Score) Severity() string {
-	switch {
-	case score.tenths == 0:
-		return "NONE"
-	case score.tenths < 40:
-		return "LOW"
-	case score.tenths < 70:
-		return "MEDIUM"
-	case score.tenths < 90:
-		return "HIGH"
-	default:
-		return "CRITICAL"
-	}
-}
-
-func validLength(text string) bool { return len(text) > 0 && len(text) <= maxVectorBytes }
-
-func metricIndex(name string) int {
-	switch name {
-	case "AV":
-		return 0
-	case "AC":
-		return 1
-	case "PR":
-		return 2
-	case "UI":
-		return 3
-	case "S":
-		return 4
-	case "C":
-		return 5
-	case "I":
-		return 6
-	case "A":
-		return 7
-	}
-	return -1
-}
-
-func optionalIndex(name string) int {
-	switch len(name) {
-	case 1:
-		if name == "E" {
-			return 0
-		}
-	case 2:
-		return optionalIndex2(name)
-	case 3:
-		return optionalIndex3(name)
-	}
-	return -1
-}
-
-func optionalIndex2(name string) int {
-	switch name {
-	case "RL":
-		return 1
-	case "RC":
-		return 2
-	case "CR":
-		return 3
-	case "IR":
-		return 4
-	case "AR":
-		return 5
-	case "MS":
-		return 10
-	case "MC":
-		return 11
-	case "MI":
-		return 12
-	case "MA":
-		return 13
-	}
-	return -1
-}
-
-func optionalIndex3(name string) int {
-	switch name {
-	case "MAV":
-		return 6
-	case "MAC":
-		return 7
-	case "MPR":
-		return 8
-	case "MUI":
-		return 9
-	}
-	return -1
-}
-
-func metricString(value byte) string {
-	if value >= 'A' && value <= 'Z' {
-		return metricStrings[value-'A']
-	}
-	return ""
-}
+func (score Score) Severity() string { return scoretext.Severity(score.tenths) }
 
 func roundup(value float64) int {
 	return (int(value*100000+.5) + 9999) / 10000
@@ -702,10 +235,17 @@ func scoreByte(tenths int) uint8 {
 	}
 	return uint8(tenths)
 }
-
-func clamp(value, maximum float64) float64 {
-	if value > maximum {
-		return maximum
+func modifiedImpact(metrics [8]byte, optional [14]byte) float64 {
+	miss := cvss3.ModifiedISS(metrics, optional)
+	if metrics[cvss3.ScopeIndex] == 'C' {
+		return 7.52*(miss-.029) - 3.25*pow13(miss*.9731-.02)
 	}
-	return value
+	return 6.42 * miss
+}
+
+func pow13(value float64) float64 {
+	squared := value * value
+	fourth := squared * squared
+	eighth := fourth * fourth
+	return eighth * fourth * value
 }

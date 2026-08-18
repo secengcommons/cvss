@@ -77,7 +77,7 @@ func BenchmarkScore(b *testing.B) {
 
 func BenchmarkAppendText(b *testing.B) {
 	vector := mustParseBenchmark(b, "AV:N/AC:L/Au:N/C:N/I:N/A:C/E:F/RL:OF/RC:C")
-	buffer := make([]byte, 0, vector.textLength())
+	buffer := make([]byte, 0, textLength(vector.decode()))
 	var err error
 	for b.Loop() {
 		buffer, err = vector.AppendText(buffer[:0])

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -61,5 +62,34 @@ func TestReadExact(t *testing.T) {
 	}
 	if _, err := readExact(filepath.Join(t.TempDir(), "missing"), 0, ""); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing source error = %v", err)
+	}
+}
+
+func TestBoundedBuffer(t *testing.T) {
+	t.Parallel()
+	var buffer boundedBuffer
+	buffer.maximum = 4
+	for _, value := range []string{"ab", "cde", "f"} {
+		written, err := buffer.Write([]byte(value))
+		if err != nil || written != len(value) {
+			t.Fatalf("Write(%q) = %d, %v", value, written, err)
+		}
+	}
+	if buffer.String() != "abcd" || !buffer.overflow {
+		t.Fatalf("buffer = %q, overflow %t", buffer.String(), buffer.overflow)
+	}
+}
+
+func TestValidScore(t *testing.T) {
+	t.Parallel()
+	for _, score := range []float64{0, 0.1, 5.5, 10} {
+		if !validScore(score) {
+			t.Fatalf("valid score %f rejected", score)
+		}
+	}
+	for _, score := range []float64{-0.1, 1.11, 10.1, math.NaN(), math.Inf(1)} {
+		if validScore(score) {
+			t.Fatalf("invalid score %f accepted", score)
+		}
 	}
 }

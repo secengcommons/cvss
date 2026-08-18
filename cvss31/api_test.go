@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"testing"
+
+	"github.com/cticommons/cvss/internal/vectorinput"
 )
 
 func TestMetricLookup(t *testing.T) {
@@ -38,13 +40,16 @@ func TestMetricLookup(t *testing.T) {
 
 func assertBaseMetrics(t *testing.T, base Vector) {
 	t.Helper()
-	for _, name := range metricNames {
-		metric, ok := base.Metric(name)
+	for _, metric := range base.Metrics() {
+		found, ok := base.Metric(metric.Name)
 		if !ok {
-			t.Fatalf("base metric %s not found", name)
+			t.Fatalf("base metric %s not found", metric.Name)
 		}
-		if _, err := base.WithMetric(metric); err != nil {
-			t.Fatalf("replace base metric %s: %v", name, err)
+		if found != metric {
+			t.Fatalf("base metric %s = %#v, want %#v", metric.Name, found, metric)
+		}
+		if _, err := base.WithMetric(found); err != nil {
+			t.Fatalf("replace base metric %s: %v", metric.Name, err)
 		}
 	}
 }
@@ -141,10 +146,10 @@ func assertDecodeBounds(t *testing.T, source string, before Vector) {
 		t.Fatalf("nil JSON receiver error = %v", err)
 	}
 	decoded := before
-	if err := decoded.UnmarshalText(make([]byte, maxVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
+	if err := decoded.UnmarshalText(make([]byte, vectorinput.MaxTextBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
 		t.Fatalf("oversized text changed receiver: %v", err)
 	}
-	if err := decoded.UnmarshalJSON(make([]byte, maxJSONVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
+	if err := decoded.UnmarshalJSON(make([]byte, vectorinput.MaxJSONBytes+1)); !errors.Is(err, ErrInvalidVector) || decoded != before {
 		t.Fatalf("oversized JSON changed receiver: %v", err)
 	}
 }
@@ -167,23 +172,6 @@ func TestSubscores(t *testing.T) {
 	}
 	if _, err := (Vector{}).Exploitability(); !errors.Is(err, ErrInvalidVector) {
 		t.Fatalf("zero Exploitability error = %v", err)
-	}
-}
-
-func TestMetricStringAlphabet(t *testing.T) {
-	for _, value := range []byte("ACFHLMNOPRTUW") {
-		if metricString(value) == "" {
-			t.Fatalf("metricString(%q) is empty", value)
-		}
-	}
-	if metricString('?') != "" {
-		t.Fatal("unknown metric byte accepted")
-	}
-}
-
-func TestMetricIndexRejectsUnknownShape(t *testing.T) {
-	if optionalIndex("BAD") >= 0 {
-		t.Fatal("unknown three-byte metric accepted")
 	}
 }
 

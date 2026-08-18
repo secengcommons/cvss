@@ -1,10 +1,6 @@
 package cvss40
 
-import (
-	"encoding/json"
-
-	"github.com/cticommons/cvss/internal/jsontext"
-)
+import "github.com/cticommons/cvss/internal/vectorinput"
 
 // False for absent or unknown metrics
 func (vector Vector) Metric(name string) (Metric, bool) {
@@ -51,37 +47,12 @@ func (vector Vector) WithMetric(metric Metric) (Vector, error) {
 
 // Receiver replacement is transactional
 func (vector *Vector) UnmarshalText(text []byte) error {
-	if vector == nil || len(text) == 0 || len(text) > maxVectorBytes {
-		return ErrInvalidVector
-	}
-	return unmarshal(vector, string(text))
+	return vectorinput.UnmarshalText(vector, text, Parse, ErrInvalidVector)
 }
 
 // Receiver replacement is transactional
 func (vector *Vector) UnmarshalJSON(data []byte) error {
-	if vector == nil || len(data) == 0 || len(data) > maxJSONVectorBytes {
-		return ErrInvalidVector
-	}
-	if text, ok := jsontext.Plain(data); ok {
-		return vector.UnmarshalText(text)
-	}
-	var text string
-	if err := json.Unmarshal(data, &text); err != nil {
-		return ErrInvalidVector
-	}
-	return unmarshal(vector, text)
-}
-
-func unmarshal(vector *Vector, text string) error {
-	if len(text) == 0 || len(text) > maxVectorBytes {
-		return ErrInvalidVector
-	}
-	parsed, err := Parse(text)
-	if err != nil {
-		return err
-	}
-	*vector = parsed
-	return nil
+	return vectorinput.UnmarshalJSON(vector, data, Parse, ErrInvalidVector)
 }
 
 func requiredMetricIndex(name string) int {

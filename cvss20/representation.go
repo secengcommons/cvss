@@ -1,12 +1,24 @@
 package cvss20
 
-import "encoding/binary"
+import "github.com/cticommons/cvss/internal/mixedradix"
 
-const baseStateCount = 729
+const baseStateCount = 3 * 3 * 3 * 3 * 3 * 3
 
-var baseStrides = [...]uint64{1, 3, 9, 27, 81, 243}
-var optionalStrides = [...]uint64{729, 4374, 26244, 131220, 918540, 5511240, 27556200, 137781000}
-var optionalRadices = [...]uint64{6, 6, 5, 7, 6, 5, 5, 5}
+var optionalRadices = [...]uint64{5, 5, 4, 6, 5, 4, 4, 4}
+var baseStrides = func() [len(metricValues)]uint64 {
+	var result [len(metricValues)]uint64
+	var radices [len(metricValues)]uint64
+	for index, values := range metricValues {
+		radices[index] = uint64(len(values))
+	}
+	mixedradix.FillStrides(result[:], radices[:], 1)
+	return result
+}()
+var optionalStrides = func() [len(optionalRadices)]uint64 {
+	var result [len(optionalRadices)]uint64
+	mixedradix.FillStrides(result[:], optionalRadices[:], baseStateCount)
+	return result
+}()
 
 type decodedVector struct {
 	values   [6]byte
@@ -14,7 +26,8 @@ type decodedVector struct {
 }
 
 type stateBuilder struct {
-	raw uint64
+	raw          uint64
+	optionalSeen bool
 }
 
 func (builder *stateBuilder) setBase(index int, value byte) bool {
@@ -28,13 +41,15 @@ func (builder *stateBuilder) setBase(index int, value byte) bool {
 
 func (builder *stateBuilder) setOptional(index int, code byte) {
 	builder.raw += uint64(code) * optionalStrides[index]
+	builder.optionalSeen = true
 }
 
 func (builder *stateBuilder) vector() Vector {
 	encoded := builder.raw + 1
-	var state [8]byte
-	binary.LittleEndian.PutUint64(state[:], encoded)
-	return Vector{state: binary.LittleEndian.Uint32(state[:4])}
+	if encoded >= 1<<32 {
+		panic("CVSS 2.0 state exceeds four bytes")
+	}
+	return Vector{state: uint32(encoded)}
 }
 
 func encodeVector(decoded decodedVector) Vector {
@@ -59,19 +74,20 @@ func (vector Vector) decode() decodedVector {
 			metricValues[4][takeDigit(&raw, 3)][0], metricValues[5][takeDigit(&raw, 3)][0],
 		},
 		optional: [8]byte{
-			digitBytes[takeDigit(&raw, 6)], digitBytes[takeDigit(&raw, 6)], digitBytes[takeDigit(&raw, 5)], digitBytes[takeDigit(&raw, 7)],
-			digitBytes[takeDigit(&raw, 6)], digitBytes[takeDigit(&raw, 5)], digitBytes[takeDigit(&raw, 5)], digitBytes[takeDigit(&raw, 5)],
+			digitBytes[takeDigit(&raw, 5)], digitBytes[takeDigit(&raw, 5)], digitBytes[takeDigit(&raw, 4)], digitBytes[takeDigit(&raw, 6)],
+			digitBytes[takeDigit(&raw, 5)], digitBytes[takeDigit(&raw, 4)], digitBytes[takeDigit(&raw, 4)], digitBytes[takeDigit(&raw, 4)],
 		},
 	}
 }
 
+// Kept local because cross-package pointer consumption measurably slows parsing
 func takeDigit(raw *uint64, radix uint64) uint64 {
 	digit := *raw % radix
 	*raw /= radix
 	return digit
 }
 
-const digitBytes = "\x00\x01\x02\x03\x04\x05\x06"
+const digitBytes = "\x00\x01\x02\x03\x04\x05"
 
 func (vector Vector) baseTenths() int {
 	raw := uint64(vector.state - 1)
@@ -99,30 +115,20 @@ func baseMetricValue(raw uint64, name string) string {
 
 func (vector Vector) optionalCode(index int) byte {
 	raw := uint64(vector.state - 1)
-	return digitBytes[mixedDigit(raw, optionalStrides[index], optionalRadices[index])]
+	return digitBytes[mixedradix.Digit(raw, optionalStrides[index], optionalRadices[index])]
 }
 
 func (vector Vector) withBase(index int, value byte) Vector {
 	digit, _ := byteIndex(metricValues[index], value)
-	raw := replaceDigit(uint64(vector.state-1), baseStrides[index], uint64(len(metricValues[index])), digit)
+	raw := mixedradix.Replace(uint64(vector.state-1), baseStrides[index], uint64(len(metricValues[index])), digit)
 	builder := stateBuilder{raw: raw}
 	return builder.vector()
 }
 
 func (vector Vector) withOptional(index int, code byte) Vector {
-	raw := replaceDigit(uint64(vector.state-1), optionalStrides[index], optionalRadices[index], uint64(code))
+	raw := mixedradix.Replace(uint64(vector.state-1), optionalStrides[index], optionalRadices[index], uint64(code))
 	builder := stateBuilder{raw: raw}
 	return builder.vector()
-}
-
-func mixedDigit(raw, stride, radix uint64) uint64 { return raw / stride % radix }
-
-func replaceDigit(raw, stride, radix, replacement uint64) uint64 {
-	current := mixedDigit(raw, stride, radix)
-	if replacement >= current {
-		return raw + (replacement-current)*stride
-	}
-	return raw - (current-replacement)*stride
 }
 
 func byteIndex(values []string, value byte) (uint64, bool) {

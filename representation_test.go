@@ -1,6 +1,8 @@
 package cvss_test
 
 import (
+	"encoding"
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -8,6 +10,29 @@ import (
 	"github.com/cticommons/cvss/cvss30"
 	"github.com/cticommons/cvss/cvss31"
 	"github.com/cticommons/cvss/cvss40"
+)
+
+var (
+	_ encoding.TextMarshaler   = cvss20.Vector{}
+	_ encoding.TextMarshaler   = cvss30.Vector{}
+	_ encoding.TextMarshaler   = cvss31.Vector{}
+	_ encoding.TextMarshaler   = cvss40.Vector{}
+	_ encoding.TextUnmarshaler = (*cvss20.Vector)(nil)
+	_ encoding.TextUnmarshaler = (*cvss30.Vector)(nil)
+	_ encoding.TextUnmarshaler = (*cvss31.Vector)(nil)
+	_ encoding.TextUnmarshaler = (*cvss40.Vector)(nil)
+	_ encoding.TextAppender    = cvss20.Vector{}
+	_ encoding.TextAppender    = cvss30.Vector{}
+	_ encoding.TextAppender    = cvss31.Vector{}
+	_ encoding.TextAppender    = cvss40.Vector{}
+	_ json.Marshaler           = cvss20.Vector{}
+	_ json.Marshaler           = cvss30.Vector{}
+	_ json.Marshaler           = cvss31.Vector{}
+	_ json.Marshaler           = cvss40.Vector{}
+	_ json.Unmarshaler         = (*cvss20.Vector)(nil)
+	_ json.Unmarshaler         = (*cvss30.Vector)(nil)
+	_ json.Unmarshaler         = (*cvss31.Vector)(nil)
+	_ json.Unmarshaler         = (*cvss40.Vector)(nil)
 )
 
 func TestVectorSizes(t *testing.T) {

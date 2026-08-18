@@ -8,11 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/cticommons/cvss/internal/testfixture"
 )
 
 type referenceVector struct {
@@ -21,6 +22,11 @@ type referenceVector struct {
 	Score    float64 `json:"score,omitempty"`
 	Severity string  `json:"severity,omitempty"`
 }
+
+const (
+	decodedReferenceBytes  = 9911450
+	decodedReferenceSHA256 = "0bcc7bb6227d75d24dd1dc89db1c903649e4b951837e573abf290d255d9523bd"
+)
 
 type macroReference struct {
 	Vector   string  `json:"vector"`
@@ -157,7 +163,7 @@ func validCompleteQualification(source fixtureSource) bool {
 	return complete.Repository == source.Qualification.Repository && complete.Commit == source.Qualification.Commit &&
 		complete.Path == source.Qualification.Path && complete.SHA256 == source.Qualification.SHA256 && complete.Length == source.Qualification.Length &&
 		complete.Records == 66298 && complete.Valid == 41270 && complete.Invalid == 25028 && complete.BareInvalid == 33 &&
-		complete.DecodedSHA256 == "0bcc7bb6227d75d24dd1dc89db1c903649e4b951837e573abf290d255d9523bd" && complete.DecodedLength == 9911450 && complete.Transformation != ""
+		complete.DecodedSHA256 == decodedReferenceSHA256 && complete.DecodedLength == decodedReferenceBytes && complete.Transformation != ""
 }
 
 func validRoundingQualification(source fixtureSource) bool {
@@ -244,10 +250,13 @@ func readCompleteReferences(tb testing.TB) []referenceVector {
 			tb.Errorf("close complete reference set: %v", err)
 		}
 	})
-	const maxReferenceBytes = 12 << 20
-	data, err := io.ReadAll(io.LimitReader(reader, maxReferenceBytes+1))
-	if err != nil || len(data) > maxReferenceBytes {
+	data, err := io.ReadAll(io.LimitReader(reader, decodedReferenceBytes+1))
+	if err != nil || len(data) != decodedReferenceBytes {
 		tb.Fatalf("read complete reference set: %v, %d bytes", err, len(data))
+	}
+	digest := sha256.Sum256(data)
+	if fmt.Sprintf("%x", digest) != decodedReferenceSHA256 {
+		tb.Fatal("complete reference set SHA-256 mismatch")
 	}
 	var tests []referenceVector
 	if err := json.Unmarshal(data, &tests); err != nil {
@@ -456,8 +465,19 @@ func TestBaseRejectsNonBaseMetrics(t *testing.T) {
 	t.Parallel()
 
 	base := "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N"
-	for _, suffix := range []string{"/E:A", "/CR:H", "/MAV:N", "/S:N", "/U:Clear"} {
+	for _, suffix := range []string{"/E:X", "/E:A", "/CR:H", "/MAV:N", "/S:N", "/U:Clear"} {
 		if _, err := ParseBase(base + suffix); !errors.Is(err, ErrNonBaseVector) {
+			t.Fatalf("ParseBase suffix %q error = %v", suffix, err)
+		}
+	}
+}
+
+func TestBaseRejectsInvalidOptionalMetrics(t *testing.T) {
+	t.Parallel()
+
+	base := "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N"
+	for _, suffix := range []string{"/E:Z", "/E:", "/E:A/E:P", "/E:A/XX:N", "/E:A/"} {
+		if _, err := ParseBase(base + suffix); !errors.Is(err, ErrInvalidVector) {
 			t.Fatalf("ParseBase suffix %q error = %v", suffix, err)
 		}
 	}
@@ -602,28 +622,7 @@ func scoreOf(tb testing.TB, vector Vector) Score {
 
 func readFixture(tb testing.TB, name string) []byte {
 	tb.Helper()
-	if filepath.Base(name) != name {
-		tb.Fatalf("fixture name %q is not a base name", name)
-	}
-	root, err := os.OpenRoot(filepath.Join("..", "testdata", "first"))
-	if err != nil {
-		tb.Fatalf("open fixture root: %v", err)
-	}
-	tb.Cleanup(func() {
-		if err := root.Close(); err != nil {
-			tb.Errorf("close fixture root: %v", err)
-		}
-	})
-	file, err := root.Open(name)
-	if err != nil {
-		tb.Fatalf("open fixture %s: %v", name, err)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			tb.Errorf("close fixture %s: %v", name, err)
-		}
-	}()
-	data, err := io.ReadAll(file)
+	data, err := testfixture.Read(filepath.Join("..", "testdata", "first"), name)
 	if err != nil {
 		tb.Fatalf("read fixture %s: %v", name, err)
 	}

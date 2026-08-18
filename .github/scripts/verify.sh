@@ -173,10 +173,8 @@ formula_mutation_self_test() (
     *) printf 'Unsafe formula fixture: %s\n' "$fixture" >&2; return 1 ;;
   esac
   trap 'rm -rf -- "$fixture"' EXIT
-  cp -- go.mod "$fixture/"
-  cp -R -- cvss20 cvss30 cvss31 cvss40 testdata "$fixture/"
-  mkdir -p -- "$fixture/internal"
-  cp -R -- internal/jsontext "$fixture/internal/"
+	cp -- go.mod "$fixture/"
+	cp -R -- cvss20 cvss30 cvss31 cvss40 internal testdata "$fixture/"
   output=$fixture/result.out
 
   reject_mutation() {
@@ -211,10 +209,10 @@ formula_mutation_self_test() (
 
   reject_mutation cvss20/cvss20.go '.646' '.5' ./cvss20 TestBaseMatchesIndependentFormula
   reject_mutation cvss20/cvss20.go 'value*10 + .5' 'value*10 + .4' ./cvss20 TestBaseMatchesIndependentFormula
-  reject_mutation cvss30/cvss30.go 'pow15(miss-.02)' '0' ./cvss30 TestEnvironmentalFormulaVersionBoundary
-  reject_mutation cvss30/cvss30.go 'if scaled > float64(result)' 'if false' ./cvss30 TestRoundupUsesDirectCeiling
-  reject_mutation cvss31/cvss31.go 'pow13(miss*.9731-.02)' 'pow15(miss-.02)' ./cvss31 TestEnvironmentalFormulaVersionBoundary
-  reject_mutation cvss31/cvss31.go 'value*100000+.5' 'value*100000+.4' ./cvss31 TestRoundupUsesFiveDecimalIntermediate
+	reject_mutation cvss30/cvss30.go 'cvss3.Pow15(miss-.02)' '0' ./cvss30 TestEnvironmentalFormulaVersionBoundary
+	reject_mutation cvss30/cvss30.go 'if scaled > float64(result)' 'if false' ./cvss30 TestRoundupUsesDirectCeiling
+	reject_mutation cvss31/cvss31.go 'pow13(miss*.9731-.02)' 'cvss3.Pow15(miss-.02)' ./cvss31 TestEnvironmentalFormulaVersionBoundary
+	reject_mutation cvss31/cvss31.go 'value*100000+.5' 'value*100000+.4' ./cvss31 TestRoundupUsesFiveDecimalIntermediate
   reject_mutation cvss40/macro_scores.go '0:   100,' '0:   99,' ./cvss40 TestMacroVectors
   reject_mutation cvss40/cvss40.go '(value+epsilon)*10' 'value*10' ./cvss40 TestCompleteReferenceSet
   printf 'Formula qualification killed 8 mutations\n'

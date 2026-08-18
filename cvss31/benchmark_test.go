@@ -1,6 +1,10 @@
 package cvss31
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/cticommons/cvss/internal/cvss3"
+)
 
 var (
 	benchmarkVector  Vector
@@ -90,7 +94,7 @@ func BenchmarkScore(b *testing.B) {
 
 func BenchmarkAppendText(b *testing.B) {
 	vector := mustParseBenchmark(b, "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N/RL:O/CR:L")
-	buffer := make([]byte, 0, vector.textLength())
+	buffer := make([]byte, 0, cvss3.TextLength(prefix, vector.state))
 	var err error
 	for b.Loop() {
 		buffer, err = vector.AppendText(buffer[:0])

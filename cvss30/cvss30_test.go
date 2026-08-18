@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/cticommons/cvss/internal/cvss3"
+	"github.com/cticommons/cvss/internal/testfixture"
 )
 
 func TestPublishedFixtureAttribution(t *testing.T) {
@@ -146,6 +147,17 @@ func TestBaseRejectsNonBaseMetrics(t *testing.T) {
 	}
 }
 
+func TestBaseRejectsInvalidOptionalMetrics(t *testing.T) {
+	t.Parallel()
+
+	base := "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+	for _, suffix := range []string{"/E:Z", "/E:", "/E:F/E:P", "/E:F/XX:N", "/E:F/"} {
+		if _, err := ParseBase(base + suffix); !errors.Is(err, ErrInvalidVector) {
+			t.Fatalf("ParseBase suffix %q error = %v", suffix, err)
+		}
+	}
+}
+
 func TestParseCompleteVector(t *testing.T) {
 	t.Parallel()
 
@@ -188,7 +200,7 @@ func TestParseAcceptsEveryOptionalValue(t *testing.T) {
 	values := []string{"XUPFH", "XUWTO", "XCRU", "XHML", "XHML", "XHML", "XNALP", "XLH", "XNLH", "XNR", "XUC", "XHLN", "XHLN", "XHLN"}
 	for index, allowed := range values {
 		for _, value := range allowed {
-			text := base + "/" + optionalNames[index] + ":" + string(value)
+			text := base + "/" + cvss3.OptionalName(index) + ":" + string(value)
 			if _, err := Parse(text); err != nil {
 				t.Fatalf("Parse(%q): %v", text, err)
 			}
@@ -433,7 +445,7 @@ func TestBaseMatchesIndependentFormula(t *testing.T) {
 		}
 	}
 	visit(0)
-	if cases != 2592 || rounded == 0 {
+	if cases != baseStateCount || rounded == 0 {
 		t.Fatalf("qualification = %d cases, %d rounded", cases, rounded)
 	}
 }
@@ -540,28 +552,7 @@ func TestScoreByteRejectsImpossibleValue(t *testing.T) {
 
 func readFixture(tb testing.TB, name string) []byte {
 	tb.Helper()
-	if filepath.Base(name) != name {
-		tb.Fatalf("fixture name %q is not a base name", name)
-	}
-	root, err := os.OpenRoot(filepath.Join("..", "testdata", "first"))
-	if err != nil {
-		tb.Fatalf("open fixture root: %v", err)
-	}
-	tb.Cleanup(func() {
-		if err := root.Close(); err != nil {
-			tb.Errorf("close fixture root: %v", err)
-		}
-	})
-	file, err := root.Open(name)
-	if err != nil {
-		tb.Fatalf("open fixture %s: %v", name, err)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			tb.Errorf("close fixture %s: %v", name, err)
-		}
-	}()
-	data, err := io.ReadAll(file)
+	data, err := testfixture.Read(filepath.Join("..", "testdata", "first"), name)
 	if err != nil {
 		tb.Fatalf("read fixture %s: %v", name, err)
 	}

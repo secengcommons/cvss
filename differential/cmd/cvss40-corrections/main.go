@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,19 +11,28 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 const (
-	calculatorLength = 44895
-	calculatorSHA256 = "6625cc93aae9f01bc9990e4b36f4b133995b32072da90bb7be369d93db9173aa"
-	corpusLength     = 791054
-	corpusSHA256     = "db7355c4074dd6e962e4f9a200e26a8c1026083ffc41eebd9ec768f96729957c"
-	decodedLength    = 9911450
-	decodedSHA256    = "0bcc7bb6227d75d24dd1dc89db1c903649e4b951837e573abf290d255d9523bd"
-	validRecords     = 41270
+	calculatorLength  = 44895
+	calculatorSHA256  = "6625cc93aae9f01bc9990e4b36f4b133995b32072da90bb7be369d93db9173aa"
+	corpusLength      = 791054
+	corpusSHA256      = "db7355c4074dd6e962e4f9a200e26a8c1026083ffc41eebd9ec768f96729957c"
+	decodedLength     = 9911450
+	decodedSHA256     = "0bcc7bb6227d75d24dd1dc89db1c903649e4b951837e573abf290d255d9523bd"
+	validRecords      = 41270
+	correctionRecords = 157
+	// Output permits 32 bytes for every expected JSON score
+	calculatorOutputBytes = validRecords * 32
+	// Diagnostics are retained only for bounded failure reporting
+	calculatorErrorBytes = 64 << 10
+	// The pinned local calculator must complete as one bounded operation
+	calculatorTimeout = 30 * time.Second
 )
 
 const nodeProgram = `
@@ -99,6 +109,9 @@ func generate(node, calculatorPath, corpusPath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(corrections) != correctionRecords {
+		return nil, fmt.Errorf("correction records = %d, want %d", len(corrections), correctionRecords)
+	}
 	return json.Marshal(corrections)
 }
 
@@ -168,29 +181,67 @@ func calculate(node string, calculator []byte, vectors []string) ([]float64, err
 	if err != nil {
 		return nil, fmt.Errorf("encode vectors: %w", err)
 	}
-	command := exec.Command(node, "-e", nodeProgram)
+	ctx, cancel := context.WithTimeout(context.Background(), calculatorTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, "-e", nodeProgram)
 	command.Stdin = bytes.NewReader(input)
-	output, err := command.Output()
+	output := boundedBuffer{maximum: calculatorOutputBytes}
+	diagnostics := boundedBuffer{maximum: calculatorErrorBytes}
+	command.Stdout = &output
+	command.Stderr = &diagnostics
+	err = command.Run()
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			return nil, fmt.Errorf("calculator failed: %s", bytes.TrimSpace(exit.Stderr))
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("calculator deadline: %w", ctx.Err())
 		}
-		return nil, fmt.Errorf("start calculator: %w", err)
+		return nil, fmt.Errorf("calculator failed: %w: %s", err, bytes.TrimSpace(diagnostics.Bytes()))
+	}
+	if output.overflow {
+		return nil, errors.New("calculator output exceeds its byte limit")
 	}
 	var scores []float64
-	if err := json.Unmarshal(output, &scores); err != nil {
+	if err := json.Unmarshal(output.Bytes(), &scores); err != nil {
 		return nil, fmt.Errorf("decode calculator output: %w", err)
 	}
 	if len(scores) != len(vectors) {
 		return nil, fmt.Errorf("calculator scores = %d, want %d", len(scores), len(vectors))
 	}
+	for index, score := range scores {
+		if !validScore(score) {
+			return nil, fmt.Errorf("calculator score %d is invalid", index)
+		}
+	}
 	return scores, nil
 }
 
+func validScore(score float64) bool {
+	return score >= 0 && score <= 10 && score == math.Round(score*10)/10
+}
+
+type boundedBuffer struct {
+	bytes.Buffer
+	maximum  int
+	overflow bool
+}
+
+func (buffer *boundedBuffer) Write(data []byte) (int, error) {
+	written := len(data)
+	remaining := buffer.maximum - buffer.Len()
+	if remaining <= 0 {
+		buffer.overflow = true
+		return written, nil
+	}
+	if len(data) > remaining {
+		data = data[:remaining]
+		buffer.overflow = true
+	}
+	_, _ = buffer.Buffer.Write(data)
+	return written, nil
+}
+
 func derive(references []reference, scores []float64) ([]correction, error) {
-	corrections := make([]correction, 0, 157)
-	seen := make(map[string]correction, 157)
+	corrections := make([]correction, 0, correctionRecords)
+	seen := make(map[string]correction, correctionRecords)
 	scoreIndex := 0
 	for _, entry := range references {
 		if !entry.Valid {

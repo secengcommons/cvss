@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"testing"
+
+	"github.com/cticommons/cvss/internal/vectorinput"
 )
 
 func TestMetricLookup(t *testing.T) {
@@ -141,7 +143,7 @@ func TestTransactionalDecoding(t *testing.T) {
 	if err := (*Vector)(nil).UnmarshalText([]byte(want)); !errors.Is(err, ErrInvalidVector) {
 		t.Fatalf("nil text receiver error = %v", err)
 	}
-	if err := text.UnmarshalText(make([]byte, maxVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || text != before {
+	if err := text.UnmarshalText(make([]byte, vectorinput.MaxTextBytes+1)); !errors.Is(err, ErrInvalidVector) || text != before {
 		t.Fatalf("oversized text changed receiver: %v", err)
 	}
 	if _, err := text.MarshalJSON(); err != nil {
@@ -166,7 +168,7 @@ func assertJSONDecoding(t *testing.T, before Vector) {
 	if err := (*Vector)(nil).UnmarshalJSON([]byte(`"` + source + `"`)); !errors.Is(err, ErrInvalidVector) {
 		t.Fatalf("nil JSON receiver error = %v", err)
 	}
-	if err := encoded.UnmarshalJSON(make([]byte, maxJSONVectorBytes+1)); !errors.Is(err, ErrInvalidVector) || encoded != before {
+	if err := encoded.UnmarshalJSON(make([]byte, vectorinput.MaxJSONBytes+1)); !errors.Is(err, ErrInvalidVector) || encoded != before {
 		t.Fatalf("oversized JSON changed receiver: %v", err)
 	}
 }

@@ -152,6 +152,8 @@ go -C differential run ./cmd/cvss40-corrections -calculator <path-to-cvss40.js> 
 
 ### Benchmark method
 
+The results were recorded on 18 August 2026 from the source committed with this version of the README
+
 The comparison uses:
 - Linux AMD64
 - 13th Gen Intel Core i5-13400F
@@ -170,43 +172,43 @@ Setup and parsing are outside lookup, replacement, encoding and scoring timers. 
 
 Operation | CTI Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 Base | 38.94 ns, 0 B, 0 allocs | 155.80 ns, 4 B, 1 alloc | CTI Commons 4.00x faster
-CVSS 3.0 Base | 51.29 ns, 0 B, 0 allocs | 118.30 ns, 8 B, 1 alloc | CTI Commons 2.31x faster
-CVSS 3.1 Base | 51.69 ns, 0 B, 0 allocs | 112.80 ns, 8 B, 1 alloc | CTI Commons 2.18x faster
-CVSS 4.0 Base | 82.73 ns, 0 B, 0 allocs | 256.80 ns, 16 B, 1 alloc | CTI Commons 3.10x faster
-CVSS 2.0 complete | 158.40 ns, 0 B, 0 allocs | 324.30 ns, 4 B, 1 alloc | CTI Commons 2.05x faster
-CVSS 3.0 complete | 155.90 ns, 0 B, 0 allocs | 448.00 ns, 8 B, 1 alloc | CTI Commons 2.87x faster
-CVSS 3.1 complete | 137.60 ns, 0 B, 0 allocs | 420.00 ns, 8 B, 1 alloc | CTI Commons 3.05x faster
-CVSS 4.0 complete | 169.80 ns, 0 B, 0 allocs | 382.20 ns, 16 B, 1 alloc | CTI Commons 2.25x faster
+CVSS 2.0 Base | 40.43 ns, 0 B, 0 allocs | 157.90 ns, 4 B, 1 alloc | CTI Commons 3.91x faster
+CVSS 3.0 Base | 54.13 ns, 0 B, 0 allocs | 120.40 ns, 8 B, 1 alloc | CTI Commons 2.22x faster
+CVSS 3.1 Base | 52.81 ns, 0 B, 0 allocs | 122.80 ns, 8 B, 1 alloc | CTI Commons 2.33x faster
+CVSS 4.0 Base | 86.07 ns, 0 B, 0 allocs | 274.50 ns, 16 B, 1 alloc | CTI Commons 3.19x faster
+CVSS 2.0 complete | 169.30 ns, 0 B, 0 allocs | 367.80 ns, 4 B, 1 alloc | CTI Commons 2.17x faster
+CVSS 3.0 complete | 148.30 ns, 0 B, 0 allocs | 440.30 ns, 8 B, 1 alloc | CTI Commons 2.97x faster
+CVSS 3.1 complete | 151.50 ns, 0 B, 0 allocs | 434.90 ns, 8 B, 1 alloc | CTI Commons 2.87x faster
+CVSS 4.0 complete | 165.40 ns, 0 B, 0 allocs | 380.00 ns, 16 B, 1 alloc | CTI Commons 2.30x faster
 
 **Canonical string encoding:**
 
 Version | CTI Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 | 62.23 ns, 32 B, 1 alloc | 107.60 ns, 32 B, 1 alloc | CTI Commons 1.73x faster
-CVSS 3.0 | 80.13 ns, 48 B, 1 alloc | 127.90 ns, 48 B, 1 alloc | CTI Commons 1.60x faster
-CVSS 3.1 | 79.89 ns, 48 B, 1 alloc | 163.20 ns, 48 B, 1 alloc | CTI Commons 2.04x faster
-CVSS 4.0 | 145.50 ns, 64 B, 1 alloc | 213.30 ns, 64 B, 1 alloc | CTI Commons 1.47x faster
+CVSS 2.0 | 44.03 ns, 32 B, 1 alloc | 107.60 ns, 32 B, 1 alloc | CTI Commons 2.44x faster
+CVSS 3.0 | 46.16 ns, 48 B, 1 alloc | 127.70 ns, 48 B, 1 alloc | CTI Commons 2.77x faster
+CVSS 3.1 | 45.40 ns, 48 B, 1 alloc | 124.40 ns, 48 B, 1 alloc | CTI Commons 2.74x faster
+CVSS 4.0 | 122.40 ns, 64 B, 1 alloc | 201.20 ns, 64 B, 1 alloc | CTI Commons 1.64x faster
 
 **Lookup, replacement and scoring:**
 
 Operation | CTI Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 lookup | 2.85 ns | 2.24 ns | Pandatix 1.27x faster
-CVSS 3.0 lookup | 2.81 ns | 2.67 ns | Pandatix 1.05x faster
-CVSS 3.1 lookup | 3.15 ns | 3.03 ns | Pandatix 1.04x faster
-CVSS 4.0 lookup | 3.26 ns | 3.24 ns | Near parity
-CVSS 2.0 replacement | 6.04 ns | 10.14 ns | CTI Commons 1.68x faster
-CVSS 3.0 replacement | 11.49 ns | 6.87 ns | Pandatix 1.67x faster
-CVSS 3.1 replacement | 9.48 ns | 4.84 ns | Pandatix 1.96x faster
-CVSS 4.0 replacement | 6.62 ns | 3.33 ns | Pandatix 1.99x faster
-CVSS 2.0 Environmental score | 30.11 ns | 19.32 ns | Pandatix 1.56x faster
-CVSS 3.0 Environmental score | 46.07 ns | 23.06 ns | Pandatix 2.00x faster
-CVSS 3.1 Environmental score | 38.58 ns | 22.86 ns | Pandatix 1.69x faster
-CVSS 2.0 Base score | 1.25 ns | 8.64 ns | CTI Commons 6.89x faster
-CVSS 3.0 Base score | 2.05 ns | 9.98 ns | CTI Commons 4.86x faster
-CVSS 3.1 Base score | 2.03 ns | 9.90 ns | CTI Commons 4.87x faster
-CVSS 4.0 score | 153.20 ns | 952.20 ns | CTI Commons 6.22x faster
+CVSS 2.0 lookup | 2.38 ns | 1.97 ns | Pandatix 1.21x faster
+CVSS 3.0 lookup | 4.16 ns | 2.65 ns | Pandatix 1.57x faster
+CVSS 3.1 lookup | 4.06 ns | 2.70 ns | Pandatix 1.50x faster
+CVSS 4.0 lookup | 3.07 ns | 2.98 ns | Near parity
+CVSS 2.0 replacement | 5.44 ns | 9.85 ns | CTI Commons 1.81x faster
+CVSS 3.0 replacement | 10.64 ns | 5.21 ns | Pandatix 2.04x faster
+CVSS 3.1 replacement | 10.83 ns | 4.89 ns | Pandatix 2.21x faster
+CVSS 4.0 replacement | 6.07 ns | 3.04 ns | Pandatix 2.00x faster
+CVSS 2.0 Environmental score | 25.46 ns | 18.32 ns | Pandatix 1.39x faster
+CVSS 3.0 Environmental score | 48.05 ns | 21.67 ns | Pandatix 2.22x faster
+CVSS 3.1 Environmental score | 47.74 ns | 21.89 ns | Pandatix 2.18x faster
+CVSS 2.0 Base score | 1.31 ns | 8.30 ns | CTI Commons 6.35x faster
+CVSS 3.0 Base score | 2.39 ns | 9.30 ns | CTI Commons 3.89x faster
+CVSS 3.1 Base score | 2.33 ns | 8.94 ns | CTI Commons 3.84x faster
+CVSS 4.0 score | 124.10 ns | 914.80 ns | CTI Commons 7.37x faster
 
 Every operation in the final table reports 0 B/op and 0 allocs/op for both libraries
 

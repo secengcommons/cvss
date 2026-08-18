@@ -1,11 +1,26 @@
 package cvss40
 
-import "strings"
+import (
+	"strings"
 
-var baseStrides = [...]uint64{1, 4, 8, 16, 48, 144, 432, 1296, 3888, 11664, 34992}
+	"github.com/cticommons/cvss/internal/metricvalue"
+	"github.com/cticommons/cvss/internal/mixedradix"
+)
+
+const baseStateCount = 4 * 2 * 2 * 3 * 3 * 3 * 3 * 3 * 3 * 3 * 3
+
 var baseRadices = [...]uint64{4, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3}
-var optionalStrides = [...]uint64{104976, 419904, 1679616, 6718464, 26873856, 134369280, 403107840, 1209323520, 4837294080, 19349176320, 77396705280, 309586821120, 1238347284480, 4953389137920, 24766945689600, 123834728448000, 371504185344000, 1114512556032000, 4458050224128000, 13374150672384000, 53496602689536000}
 var optionalRadices = [...]uint64{4, 4, 4, 4, 5, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 3, 3, 4, 3, 4, 5}
+var baseStrides = func() [len(baseRadices)]uint64 {
+	var result [len(baseRadices)]uint64
+	mixedradix.FillStrides(result[:], baseRadices[:], 1)
+	return result
+}()
+var optionalStrides = func() [len(optionalRadices)]uint64 {
+	var result [len(optionalRadices)]uint64
+	mixedradix.FillStrides(result[:], optionalRadices[:], baseStateCount)
+	return result
+}()
 
 type decodedVector struct {
 	values   [11]byte
@@ -13,7 +28,8 @@ type decodedVector struct {
 }
 
 type stateBuilder struct {
-	raw uint64
+	raw          uint64
+	optionalSeen bool
 }
 
 func (builder *stateBuilder) setBase(index int, value byte) bool {
@@ -27,6 +43,7 @@ func (builder *stateBuilder) setBase(index int, value byte) bool {
 
 func (builder *stateBuilder) setOptional(index int, code byte) {
 	builder.raw += uint64(code) * optionalStrides[index]
+	builder.optionalSeen = true
 }
 
 func (builder *stateBuilder) vector() Vector {
@@ -68,6 +85,7 @@ func (vector Vector) decode() decodedVector {
 	}
 }
 
+// Kept local because cross-package pointer consumption measurably slows parsing
 func takeDigit(raw *uint64, radix uint64) uint64 {
 	digit := *raw % radix
 	*raw /= radix
@@ -92,7 +110,7 @@ func baseMetricValue(raw uint64, name string) (string, bool) {
 	default:
 		return impactMetricValue(raw, name)
 	}
-	return metricString(value), true
+	return metricvalue.String(value), true
 }
 
 func impactMetricValue(raw uint64, name string) (string, bool) {
@@ -113,11 +131,11 @@ func impactMetricValue(raw uint64, name string) (string, bool) {
 	default:
 		return "", false
 	}
-	return metricString(value), true
+	return metricvalue.String(value), true
 }
 
 func (vector Vector) optionalCode(index int) byte {
-	return digitBytes[mixedDigit(vector.state-1, optionalStrides[index], optionalRadices[index])]
+	return digitBytes[mixedradix.Digit(vector.state-1, optionalStrides[index], optionalRadices[index])]
 }
 
 func (vector Vector) withBase(index int, value byte) (Vector, bool) {
@@ -133,17 +151,9 @@ func (vector Vector) withOptional(index int, code byte) Vector {
 }
 
 func (vector Vector) withDigit(stride, radix, replacement uint64) Vector {
-	raw := vector.state - 1
-	current := mixedDigit(raw, stride, radix)
-	if replacement >= current {
-		raw += (replacement - current) * stride
-	} else {
-		raw -= (current - replacement) * stride
-	}
+	raw := mixedradix.Replace(vector.state-1, stride, radix, replacement)
 	return Vector{state: raw + 1}
 }
-
-func mixedDigit(raw, stride, radix uint64) uint64 { return raw / stride % radix }
 
 func digitIndex(values string, value byte) (uint64, bool) {
 	switch strings.IndexByte(values, value) {

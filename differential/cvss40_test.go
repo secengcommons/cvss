@@ -3,13 +3,22 @@ package differential
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
-	"os"
 	"testing"
 
 	cti40 "github.com/cticommons/cvss/cvss40"
+	"github.com/cticommons/cvss/internal/testfixture"
 	pandatix40 "github.com/pandatix/go-cvss/40"
+)
+
+const (
+	decodedReferenceBytes  = 9911450
+	decodedReferenceSHA256 = "0bcc7bb6227d75d24dd1dc89db1c903649e4b951837e573abf290d255d9523bd"
+	correctionBytes        = 23245
+	correctionSHA256       = "bf44b93801b29ab04755fba3bfc0356eb474f139cbef9fda014219419ef6ff3a"
 )
 
 type referenceVector40 struct {
@@ -66,6 +75,9 @@ func qualifyReference40(tb testing.TB, reference referenceVector40, corrections 
 	correction, corrected := corrections[reference.Vector]
 	expected := reference.Score
 	if corrected {
+		if correction.Previous != reference.Score {
+			tb.Fatalf("rounding correction for %q does not bind the retained score", reference.Vector)
+		}
 		expected = correction.Score
 	}
 	ours, err := cti40.Parse(reference.Vector)
@@ -102,7 +114,7 @@ func count(condition bool) int {
 
 func loadReferenceVectors40(tb testing.TB) []referenceVector40 {
 	tb.Helper()
-	compressed, err := os.ReadFile("../testdata/first/v40-reference-complete.json.gz")
+	compressed, err := testfixture.Read("../testdata/first", "v40-reference-complete.json.gz")
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -110,12 +122,15 @@ func loadReferenceVectors40(tb testing.TB) []referenceVector40 {
 	if err != nil {
 		tb.Fatal(err)
 	}
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		tb.Fatal(err)
+	data, err := io.ReadAll(io.LimitReader(reader, decodedReferenceBytes+1))
+	if err != nil || len(data) != decodedReferenceBytes {
+		tb.Fatalf("read reference vectors: %v, %d bytes", err, len(data))
 	}
 	if err := reader.Close(); err != nil {
 		tb.Fatal(err)
+	}
+	if digest := fmt.Sprintf("%x", sha256.Sum256(data)); digest != decodedReferenceSHA256 {
+		tb.Fatal("reference vectors SHA-256 mismatch")
 	}
 	var references []referenceVector40
 	if err := json.Unmarshal(data, &references); err != nil {
@@ -126,9 +141,12 @@ func loadReferenceVectors40(tb testing.TB) []referenceVector40 {
 
 func loadRoundingCorrections40(tb testing.TB) map[string]roundingCorrection40 {
 	tb.Helper()
-	data, err := os.ReadFile("../testdata/first/v40-rounding-corrections.json")
+	data, err := testfixture.Read("../testdata/first", "v40-rounding-corrections.json")
 	if err != nil {
 		tb.Fatal(err)
+	}
+	if digest := fmt.Sprintf("%x", sha256.Sum256(data)); len(data) != correctionBytes || digest != correctionSHA256 {
+		tb.Fatal("rounding corrections identity mismatch")
 	}
 	var corrections []roundingCorrection40
 	if err := json.Unmarshal(data, &corrections); err != nil {
@@ -136,6 +154,9 @@ func loadRoundingCorrections40(tb testing.TB) map[string]roundingCorrection40 {
 	}
 	byVector := make(map[string]roundingCorrection40, len(corrections))
 	for _, correction := range corrections {
+		if _, exists := byVector[correction.Vector]; exists {
+			tb.Fatalf("duplicate rounding correction: %s", correction.Vector)
+		}
 		byVector[correction.Vector] = correction
 	}
 	return byVector

@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/cticommons/cvss/internal/testfixture"
 )
 
 func TestPublishedScores(t *testing.T) {
@@ -181,6 +181,17 @@ func TestParseBaseRejectsOptionalMetrics(t *testing.T) {
 	}
 }
 
+func TestParseBaseRejectsInvalidOptionalMetrics(t *testing.T) {
+	t.Parallel()
+
+	base := "AV:N/AC:L/Au:N/C:C/I:C/A:C"
+	for _, suffix := range []string{"/E:Z", "/E:", "/E:H/E:F", "/E:H/XX:N", "/E:H/"} {
+		if _, err := ParseBase(base + suffix); !errors.Is(err, ErrInvalidVector) {
+			t.Fatalf("ParseBase suffix %q error = %v", suffix, err)
+		}
+	}
+}
+
 func TestEveryMetricValue(t *testing.T) {
 	t.Parallel()
 
@@ -264,12 +275,6 @@ func TestZeroValueFailsClosed(t *testing.T) {
 	}
 }
 
-func TestInvalidStoredMetricCode(t *testing.T) {
-	if got := metricString('?'); got != "" {
-		t.Fatalf("metricString(?) = %q", got)
-	}
-}
-
 func TestBaseMatchesIndependentFormula(t *testing.T) {
 	t.Parallel()
 
@@ -296,7 +301,7 @@ func TestBaseMatchesIndependentFormula(t *testing.T) {
 		cases++
 	}
 	visit(0)
-	if cases != 729 {
+	if cases != baseStateCount {
 		t.Fatalf("qualified %d Base vectors", cases)
 	}
 }
@@ -459,28 +464,7 @@ func independentRound(value float64) float64 {
 
 func readFixture(tb testing.TB, name string) []byte {
 	tb.Helper()
-	if filepath.Base(name) != name {
-		tb.Fatalf("fixture name %q is not a base name", name)
-	}
-	root, err := os.OpenRoot(filepath.Join("..", "testdata", "first"))
-	if err != nil {
-		tb.Fatalf("open fixture root: %v", err)
-	}
-	tb.Cleanup(func() {
-		if err := root.Close(); err != nil {
-			tb.Errorf("close fixture root: %v", err)
-		}
-	})
-	file, err := root.Open(name)
-	if err != nil {
-		tb.Fatalf("open fixture %s: %v", name, err)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			tb.Errorf("close fixture %s: %v", name, err)
-		}
-	}()
-	data, err := io.ReadAll(file)
+	data, err := testfixture.Read(filepath.Join("..", "testdata", "first"), name)
 	if err != nil {
 		tb.Fatalf("read fixture %s: %v", name, err)
 	}
