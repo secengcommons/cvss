@@ -152,9 +152,7 @@ go -C differential run ./cmd/cvss40-corrections -calculator <path-to-cvss40.js> 
 
 ### Benchmark method
 
-The results were recorded on 18 August 2026 from the source committed with this version of the README
-
-The comparison uses:
+(18 August 2026) - The comparison uses:
 - Linux AMD64
 - 13th Gen Intel Core i5-13400F
 - Go 1.26.6
@@ -243,7 +241,7 @@ The retained test data binds the scoring code to published FIRST material:
 - the 270 CVSS 4.0 macro vectors and scores
 - separately retained CVSS 4.0 rounding cases
 
-The dev gate also runs strict linting, go vet, vulnerability checks, race tests, native fuzzing, formula mutations and 100% first-party statement coverage
+The dev gate also runs strict linting, go vet, vulnerability checks, race tests, native fuzzing, formula mutations and 100% first-party statement coverage. Deterministic allocation tests require zero allocations from the documented parsing, lookup, replacement, caller-buffer encoding and scoring paths. Exhaustive representation tests bind every CVSS 2.0 Base state and every CVSS 4.0 metric value to public lookup results
 
 An isolated [differential test module](differential) fuzzes canonical CVSS 2.0, 3.0 and 3.1 Base vectors against Pandatix v0.6.2
 
@@ -254,7 +252,7 @@ bash ./.github/scripts/verify.sh all
 
 Run benchmarks with:
 ```sh
-go test -run '^$' -bench . -benchmem ./...
+bash ./.github/scripts/verify.sh benchmark
 ```
 
 ## Help
