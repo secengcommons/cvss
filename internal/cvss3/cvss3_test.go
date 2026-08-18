@@ -64,9 +64,15 @@ func TestCompletePackedState(t *testing.T) {
 			t.Fatalf("Base state %d round trip = %v, %t", raw, encoded, valid)
 		}
 		for index, value := range decoded.Values {
-			name := baseNames[index]
-			if found, ok := Lookup(state, name); !ok || found != metricvalue.String(value) {
-				t.Fatalf("Base state %d metric %s = %q, %t", raw, name, found, ok)
+			if found := BaseValue(state.Raw(), index); found != value {
+				t.Fatalf("Base state %d metric %s = %q", raw, baseNames[index], found)
+			}
+			found := LongBaseValue(state.Raw(), baseNames[index])
+			if len(baseNames[index]) == 1 {
+				found = ShortBaseValue(state.Raw(), baseNames[index])
+			}
+			if found != value {
+				t.Fatalf("Base state %d direct metric %s = %q", raw, baseNames[index], found)
 			}
 		}
 	}
@@ -86,11 +92,11 @@ func TestOptionalStateAndReplacement(t *testing.T) {
 
 func checkLookupAndReplacement(t *testing.T, base State) {
 	t.Helper()
-	if _, found := Lookup(base, "E"); found {
+	if OptionalValue(base.Raw(), OptionalIndex("E")) != 0 {
 		t.Fatal("absent optional lookup succeeded")
 	}
-	if _, found := Lookup(base, "Z"); found {
-		t.Fatal("unknown short metric found")
+	if LongBaseValue(base.Raw(), "unknown") != 0 || ShortBaseValue(base.Raw(), "Z") != 0 {
+		t.Fatal("unknown Base lookup succeeded")
 	}
 	changed, valid := WithMetric(base, "AV", "P")
 	if !valid {
@@ -109,9 +115,6 @@ func checkLookupAndReplacement(t *testing.T, base State) {
 		t.Fatal("remove E with X")
 	}
 	checkInvalidReplacements(t, base)
-	if _, found := Lookup(base, "unknown"); found {
-		t.Fatal("unknown metric found")
-	}
 }
 
 func checkInvalidReplacements(t *testing.T, base State) {
@@ -138,9 +141,9 @@ func checkOptionalState(t *testing.T, base State, index int) {
 			continue
 		}
 		name := optionalNames[index]
-		got, found := Lookup(state, name)
-		if !found || got != metricvalue.String(value) {
-			t.Fatalf("optional %d = %q, %t", index, got, found)
+		got := OptionalValue(state.Raw(), index)
+		if got != value {
+			t.Fatalf("optional %d = %q", index, got)
 		}
 		replaced, valid := WithMetric(base, name, string(value))
 		if !valid || replaced != state {
@@ -292,7 +295,7 @@ func TestScoringPrimitives(t *testing.T) {
 	checkBaseScoring(t)
 	checkModifiedScoring(t)
 	checkTemporalScoring(t)
-	if Pow15(2) != 32768 || Clamp(2, 1) != 1 || Clamp(1, 2) != 1 {
+	if pow13(2) != 8192 || pow15(2) != 32768 || Clamp(2, 1) != 1 || Clamp(1, 2) != 1 {
 		t.Fatal("numeric primitives are inconsistent")
 	}
 }
@@ -313,8 +316,8 @@ func checkModifiedScoring(t *testing.T) {
 	for _, requirement := range []byte{'H', 'M', 'L', 'X'} {
 		optional := [OptionalMetricCount]byte{3: requirement, 4: requirement, 5: requirement}
 		metrics := [BaseMetricCount]byte{'N', 'L', 'N', 'N', 'U', 'H', 'L', 'N'}
-		if ModifiedISS(metrics, optional) < 0 {
-			t.Fatalf("requirement %c produced invalid MISS", requirement)
+		if ModifiedImpact30(metrics, optional) < 0 || ModifiedImpact31(metrics, optional) < 0 {
+			t.Fatalf("requirement %c produced invalid impact", requirement)
 		}
 	}
 	decoded := Decoded{Values: [BaseMetricCount]byte{'N', 'L', 'N', 'N', 'U', 'H', 'L', 'N'}}

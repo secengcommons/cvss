@@ -2,6 +2,7 @@ package cvss30
 
 import (
 	"github.com/cticommons/cvss/internal/cvss3"
+	"github.com/cticommons/cvss/internal/metricvalue"
 	"github.com/cticommons/cvss/internal/vectorinput"
 )
 
@@ -10,11 +11,21 @@ func (vector Vector) Metric(name string) (Metric, bool) {
 	if !vector.Valid() {
 		return Metric{}, false
 	}
-	value, found := cvss3.Lookup(vector.state, name)
-	if !found {
+	raw := vector.state.Raw()
+	value := cvss3.LongBaseValue(raw, name)
+	if len(name) == 1 {
+		value = cvss3.ShortBaseValue(raw, name)
+	}
+	if value == 0 {
+		index := cvss3.OptionalIndex(name)
+		if index >= 0 {
+			value = cvss3.OptionalValue(raw, index)
+		}
+	}
+	if value == 0 {
 		return Metric{}, false
 	}
-	return Metric{Name: name, Value: value}, true
+	return Metric{Name: name, Value: metricvalue.String(value)}, true
 }
 
 // The receiver is unchanged

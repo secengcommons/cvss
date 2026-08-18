@@ -93,7 +93,7 @@ func (vector Vector) Metrics() [8]Metric {
 		return metrics
 	}
 	decoded := vector.decode()
-	for index, value := range decoded.values {
+	for index, value := range decoded.Values {
 		metrics[index] = Metric{Name: cvss3.BaseName(index), Value: metricvalue.String(value)}
 	}
 	return metrics
@@ -106,7 +106,7 @@ func (vector Vector) OptionalMetrics() []Metric {
 	}
 	decoded := vector.decode()
 	count := 0
-	for _, value := range decoded.optional {
+	for _, value := range decoded.Optional {
 		if value != 0 {
 			count++
 		}
@@ -126,7 +126,7 @@ func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
 }
 
 func appendOptionalMetrics(metrics []Metric, decoded decodedVector) []Metric {
-	for index, value := range decoded.optional {
+	for index, value := range decoded.Optional {
 		if value != 0 {
 			metrics = append(metrics, Metric{Name: cvss3.OptionalName(index), Value: metricvalue.String(value)})
 		}
@@ -148,28 +148,18 @@ func (vector Vector) TemporalScore() (Score, error) {
 		return Score{}, ErrInvalidVector
 	}
 	base := float64(vector.baseTenths()) / 10
-	return Score{tenths: roundup(base * cvss3.TemporalWeight(vector.decode().optional))}, nil
+	return Score{tenths: cvss3.Roundup30(base * cvss3.TemporalWeight(vector.decode().Optional))}, nil
 }
 
 func (vector Vector) EnvironmentalScore() (Score, error) {
 	if !vector.Valid() {
 		return Score{}, ErrInvalidVector
 	}
-	return environmentalScore(vector.decode()), nil
+	return Score{tenths: cvss3.EnvironmentalScore30(vector.state)}, nil
 }
 
 func environmentalScore(decoded decodedVector) Score {
-	metrics := cvss3.ModifiedMetrics(cvss3.Decoded{Values: decoded.values, Optional: decoded.optional})
-	impact := modifiedImpact(metrics, decoded.optional)
-	if impact <= 0 {
-		return Score{}
-	}
-	raw := impact + cvss3.Exploitability(metrics)
-	if metrics[cvss3.ScopeIndex] == 'C' {
-		raw *= 1.08
-	}
-	modifiedBase := float64(roundup(cvss3.Clamp(raw, 10))) / 10
-	return Score{tenths: roundup(modifiedBase * cvss3.TemporalWeight(decoded.optional))}
+	return Score{tenths: cvss3.EnvironmentalScoreDecoded30(decoded)}
 }
 
 // Uses the highest score group containing a defined metric
@@ -178,12 +168,12 @@ func (vector Vector) Score() (Score, error) {
 		return Score{}, ErrInvalidVector
 	}
 	decoded := vector.decode()
-	if hasDefined(decoded.optional[cvss3.TemporalMetricCount:]) {
+	if hasDefined(decoded.Optional[cvss3.TemporalMetricCount:]) {
 		return environmentalScore(decoded), nil
 	}
-	if hasDefined(decoded.optional[:cvss3.TemporalMetricCount]) {
+	if hasDefined(decoded.Optional[:cvss3.TemporalMetricCount]) {
 		base := float64(vector.baseTenths()) / 10
-		return Score{tenths: roundup(base * cvss3.TemporalWeight(decoded.optional))}, nil
+		return Score{tenths: cvss3.Roundup30(base * cvss3.TemporalWeight(decoded.Optional))}, nil
 	}
 	return Score{tenths: vector.baseTenths()}, nil
 }
@@ -207,7 +197,7 @@ func baseScore(metrics [8]byte) int {
 	if metrics[cvss3.ScopeIndex] == 'C' {
 		raw *= 1.08
 	}
-	return roundup(cvss3.Clamp(raw, 10))
+	return cvss3.Roundup30(cvss3.Clamp(raw, 10))
 }
 
 func (score Score) Tenths() int { return score.tenths }
@@ -225,25 +215,9 @@ func (score Score) String() string { return scoretext.String(score.tenths) }
 // Specification rating in uppercase
 func (score Score) Severity() string { return scoretext.Severity(score.tenths) }
 
-func roundup(value float64) int {
-	scaled := value * 10
-	result := int(scaled)
-	if scaled > float64(result) {
-		result++
-	}
-	return result
-}
-
 func scoreByte(tenths int) uint8 {
 	if tenths < 0 || tenths > 100 {
 		panic("CVSS 3.0 score outside its range")
 	}
 	return uint8(tenths)
-}
-func modifiedImpact(metrics [8]byte, optional [14]byte) float64 {
-	miss := cvss3.ModifiedISS(metrics, optional)
-	if metrics[cvss3.ScopeIndex] == 'C' {
-		return 7.52*(miss-.029) - 3.25*cvss3.Pow15(miss-.02)
-	}
-	return 6.42 * miss
 }

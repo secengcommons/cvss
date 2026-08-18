@@ -3,7 +3,6 @@ package cvss3
 import (
 	"strings"
 
-	"github.com/cticommons/cvss/internal/metricvalue"
 	"github.com/cticommons/cvss/internal/mixedradix"
 	"github.com/cticommons/cvss/internal/vectorinput"
 )
@@ -247,26 +246,11 @@ func BaseName(index int) string { return baseNames[index] }
 
 func OptionalName(index int) string { return optionalNames[index] }
 
-func Lookup(state State, name string) (string, bool) {
-	raw := state.Raw()
-	var value byte
-	if len(name) == 1 {
-		value = shortBaseValue(raw, name)
-	} else {
-		value = longBaseValue(raw, name)
-	}
-	if value != 0 {
-		return metricvalue.String(value), true
-	}
-	index := OptionalIndex(name)
-	if index < 0 {
-		return "", false
-	}
-	value = optionalDigit(index, mixedradix.Digit(raw, optionalStrides[index], optionalRadices[index]))
-	return metricvalue.String(value), value != 0
+func BaseValue(raw uint64, index int) byte {
+	return baseValues[index][mixedradix.Digit(raw, baseStrides[index], baseRadices[index])]
 }
 
-func shortBaseValue(raw uint64, name string) byte {
+func ShortBaseValue(raw uint64, name string) byte {
 	switch name {
 	case "S":
 		return baseValues[4][raw/48%2]
@@ -281,7 +265,7 @@ func shortBaseValue(raw uint64, name string) byte {
 	}
 }
 
-func longBaseValue(raw uint64, name string) byte {
+func LongBaseValue(raw uint64, name string) byte {
 	switch name {
 	case "AV":
 		return baseValues[0][raw%4]
@@ -294,6 +278,10 @@ func longBaseValue(raw uint64, name string) byte {
 	default:
 		return 0
 	}
+}
+
+func OptionalValue(raw uint64, index int) byte {
+	return optionalDigit(index, mixedradix.Digit(raw, optionalStrides[index], optionalRadices[index]))
 }
 
 func WithMetric(state State, name, value string) (State, bool) {

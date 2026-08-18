@@ -19,7 +19,7 @@ const (
 func Impact(metrics [BaseMetricCount]byte) float64 {
 	iss := 1 - (1-impactWeight(metrics[confidentialityIndex]))*(1-impactWeight(metrics[integrityIndex]))*(1-impactWeight(metrics[availabilityIndex]))
 	if metrics[ScopeIndex] == 'C' {
-		return 7.52*(iss-.029) - 3.25*Pow15(iss-.02)
+		return 7.52*(iss-.029) - 3.25*pow15(iss-.02)
 	}
 	return 6.42 * iss
 }
@@ -32,11 +32,26 @@ func Exploitability(metrics [BaseMetricCount]byte) float64 {
 	return 8.22 * av * ac * pr * ui
 }
 
-func ModifiedISS(metrics [BaseMetricCount]byte, optional [OptionalMetricCount]byte) float64 {
+func ModifiedImpact30(metrics [BaseMetricCount]byte, optional [OptionalMetricCount]byte) float64 {
+	return modifiedImpact(metrics, optional, false)
+}
+
+func ModifiedImpact31(metrics [BaseMetricCount]byte, optional [OptionalMetricCount]byte) float64 {
+	return modifiedImpact(metrics, optional, true)
+}
+
+func modifiedImpact(metrics [BaseMetricCount]byte, optional [OptionalMetricCount]byte, version31 bool) float64 {
 	confidentiality := requirementWeight(optional[confidentialityRequirementIndex]) * impactWeight(metrics[confidentialityIndex])
 	integrity := requirementWeight(optional[integrityRequirementIndex]) * impactWeight(metrics[integrityIndex])
 	availability := requirementWeight(optional[availabilityRequirementIndex]) * impactWeight(metrics[availabilityIndex])
-	return Clamp(1-(1-confidentiality)*(1-integrity)*(1-availability), .915)
+	miss := Clamp(1-(1-confidentiality)*(1-integrity)*(1-availability), .915)
+	if metrics[ScopeIndex] != 'C' {
+		return 6.42 * miss
+	}
+	if version31 {
+		return 7.52*(miss-.029) - 3.25*pow13(miss*.9731-.02)
+	}
+	return 7.52*(miss-.029) - 3.25*pow15(miss-.02)
 }
 
 func TemporalWeight(optional [OptionalMetricCount]byte) float64 {
@@ -54,7 +69,52 @@ func ModifiedMetrics(decoded Decoded) [BaseMetricCount]byte {
 	return metrics
 }
 
-func Pow15(value float64) float64 {
+func EnvironmentalScore30(state State) int { return environmentalScore(state.Decode(), false) }
+
+func EnvironmentalScore31(state State) int { return environmentalScore(state.Decode(), true) }
+
+func EnvironmentalScoreDecoded30(decoded Decoded) int { return environmentalScore(decoded, false) }
+
+func EnvironmentalScoreDecoded31(decoded Decoded) int { return environmentalScore(decoded, true) }
+
+func environmentalScore(decoded Decoded, version31 bool) int {
+	metrics := ModifiedMetrics(decoded)
+	impact := modifiedImpact(metrics, decoded.Optional, version31)
+	if impact <= 0 {
+		return 0
+	}
+	raw := impact + Exploitability(metrics)
+	if metrics[ScopeIndex] == 'C' {
+		raw *= 1.08
+	}
+	modifiedBase := float64(roundup(Clamp(raw, 10), version31)) / 10
+	return roundup(modifiedBase*TemporalWeight(decoded.Optional), version31)
+}
+
+func Roundup30(value float64) int { return roundup(value, false) }
+
+func Roundup31(value float64) int { return roundup(value, true) }
+
+func roundup(value float64, version31 bool) int {
+	if version31 {
+		return (int(value*100000+.5) + 9999) / 10000
+	}
+	scaled := value * 10
+	result := int(scaled)
+	if scaled > float64(result) {
+		result++
+	}
+	return result
+}
+
+func pow13(value float64) float64 {
+	squared := value * value
+	fourth := squared * squared
+	eighth := fourth * fourth
+	return eighth * fourth * value
+}
+
+func pow15(value float64) float64 {
 	squared := value * value
 	fourth := squared * squared
 	eighth := fourth * fourth

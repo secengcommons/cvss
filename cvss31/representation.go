@@ -4,14 +4,10 @@ import "github.com/cticommons/cvss/internal/cvss3"
 
 const baseStateCount = cvss3.BaseStateCount
 
-type decodedVector struct {
-	values   [cvss3.BaseMetricCount]byte
-	optional [cvss3.OptionalMetricCount]byte
-}
+type decodedVector = cvss3.Decoded
 
 func (vector Vector) decode() decodedVector {
-	decoded := vector.state.Decode()
-	return decodedVector{values: decoded.Values, optional: decoded.Optional}
+	return vector.state.Decode()
 }
 
 func (vector Vector) baseTenths() int { return int(baseScores[vector.state.Raw()%baseStateCount]) }
