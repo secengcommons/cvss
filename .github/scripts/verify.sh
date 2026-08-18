@@ -427,6 +427,72 @@ run_campaign() {
   run_fuzz_module "$repository_root/differential"
 }
 
+run_benchmarks() (
+  local allocs benchmark binary bytes cpu implementation line middle ns order output raw sample samples temp_root
+  cd -- "$repository_root"
+  samples=${BENCHSAMPLES:-5}
+  if [[ ! "$samples" =~ ^[1-9][0-9]*$ ]] || ((samples % 2 == 0)); then
+    printf 'BENCHSAMPLES must be a positive odd integer\n' >&2
+    return 1
+  fi
+  temp_root=$(mktemp -d "${TMPDIR:-/tmp}/cticommons-cvss-benchmark.XXXXXX")
+  case "$temp_root" in
+    "${TMPDIR:-/tmp}"/cticommons-cvss-benchmark.*) ;;
+    *) printf 'Unsafe benchmark directory: %s\n' "$temp_root" >&2; return 1 ;;
+  esac
+  trap 'rm -rf -- "$temp_root"' EXIT
+  binary=$temp_root/differential$(go env GOEXE)
+  raw=$temp_root/raw.tsv
+  go -C differential test -c -o "$binary" .
+  local -a benchmarks=(
+    ParseBase20 ParseBase30 ParseBase31 ParseBase40
+    ParseComplete20 ParseComplete30 ParseComplete31 ParseComplete40
+    String20 String30 String31 String40
+    MetricLookup20 MetricLookup30 MetricLookup31 MetricLookup40
+    MetricReplacement20 MetricReplacement30 MetricReplacement31 MetricReplacement40
+    EnvironmentalScore20 EnvironmentalScore30 EnvironmentalScore31
+    BaseScore20 BaseScore30 BaseScore31 Score40
+  )
+  for ((sample = 0; sample < samples; sample++)); do
+    if ((sample % 2 == 0)); then
+      order='CTICommons Pandatix'
+    else
+      order='Pandatix CTICommons'
+    fi
+    for benchmark in "${benchmarks[@]}"; do
+      for implementation in $order; do
+        output=$("$binary" -test.run='^$' -test.bench="^Benchmark${benchmark}/${implementation}$" \
+          -test.benchmem -test.benchtime="${BENCHTIME:-150ms}" -test.count=1)
+        if [[ -z "${cpu:-}" ]]; then
+          cpu=$(awk -F ': ' '$1 == "cpu" { print $2; exit }' <<<"$output")
+        fi
+        line=$(awk -v prefix="Benchmark${benchmark}/${implementation}-" 'index($1, prefix) == 1 { print; exit }' <<<"$output")
+        if [[ -z "$line" ]]; then
+          printf 'Missing benchmark result for %s/%s\n%s\n' "$benchmark" "$implementation" "$output" >&2
+          return 1
+        fi
+        read -r _ _ ns _ bytes _ allocs _ <<<"$line"
+        printf '%s\t%s\t%s\t%s\t%s\n' "$benchmark" "$implementation" "$ns" "$bytes" "$allocs" >>"$raw"
+      done
+    done
+  done
+  printf '# goos=%s\n' "$(go env GOOS)"
+  printf '# goarch=%s\n' "$(go env GOARCH)"
+  printf '# goversion=%s\n' "$(go env GOVERSION)"
+  printf '# cpu=%s\n' "${cpu:-unknown}"
+  printf 'benchmark\timplementation\tmedian_ns_op\tB_op\tallocs_op\n'
+  middle=$((samples / 2 + 1))
+  for benchmark in "${benchmarks[@]}"; do
+    for implementation in CTICommons Pandatix; do
+      ns=$(awk -F '\t' -v benchmark="$benchmark" -v implementation="$implementation" \
+        '$1 == benchmark && $2 == implementation { print $3 }' "$raw" | sort -n | sed -n "${middle}p")
+      read -r bytes allocs < <(awk -F '\t' -v benchmark="$benchmark" -v implementation="$implementation" \
+        '$1 == benchmark && $2 == implementation { print $4, $5; exit }' "$raw")
+      printf '%s\t%s\t%s\t%s\t%s\n' "$benchmark" "$implementation" "$ns" "$bytes" "$allocs"
+    done
+  done
+)
+
 case "${1:-}" in
   all) run_static; run_compatibility; run_tests; run_campaign ;;
   static) run_static ;;
@@ -434,6 +500,7 @@ case "${1:-}" in
   test) run_tests ;;
   platform) run_platform ;;
   campaign) run_campaign ;;
+  benchmark) run_benchmarks ;;
   self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test; workflow_policy_self_test ;;
-  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|self-test\n' "${0##*/}" >&2; exit 2 ;;
+  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|benchmark|self-test\n' "${0##*/}" >&2; exit 2 ;;
 esac

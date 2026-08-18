@@ -229,8 +229,10 @@ CVSS 4.0 | 8 bytes | 9 bytes
 
 The complete paired harness is retained in [`differential`](differential). Run it with:
 ```sh
-go -C differential test -run '^$' -bench . -benchmem
+bash ./.github/scripts/verify.sh benchmark
 ```
+
+The command reproduces the documented isolated-process method and emits one median row per implementation and operation. `BENCHSAMPLES` selects a positive odd sample count and `BENCHTIME` selects the duration of each sample
 
 ## Verification
 
