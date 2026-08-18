@@ -328,6 +328,46 @@ func checkModifiedScoring(t *testing.T) {
 	}
 }
 
+func TestEnvironmentalScoring(t *testing.T) {
+	t.Parallel()
+	parsed, ok := Parse(baseVector, "CVSS:3.1/")
+	if !ok {
+		t.Fatal("parse Base vector")
+	}
+	decoded := parsed.State.Decode()
+	decoded.Values[ScopeIndex] = 'C'
+	decoded.Optional[0] = 'F'
+	decoded.Optional[1] = 'O'
+	decoded.Optional[2] = 'C'
+	state, valid := encode(decoded)
+	if !valid {
+		t.Fatal("encode Environmental vector")
+	}
+	checkEnvironmentalScores(t, state, decoded)
+	checkEnvironmentalBoundaries(t, decoded)
+}
+
+func checkEnvironmentalScores(t *testing.T, state State, decoded Decoded) {
+	t.Helper()
+	if score := EnvironmentalScore30(state); score <= 0 || score != EnvironmentalScoreDecoded30(decoded) {
+		t.Fatalf("CVSS 3.0 Environmental score = %d", score)
+	}
+	if score := EnvironmentalScore31(state); score <= 0 || score != EnvironmentalScoreDecoded31(decoded) {
+		t.Fatalf("CVSS 3.1 Environmental score = %d", score)
+	}
+}
+
+func checkEnvironmentalBoundaries(t *testing.T, decoded Decoded) {
+	t.Helper()
+	decoded.Values[5], decoded.Values[6], decoded.Values[7] = 'N', 'N', 'N'
+	if EnvironmentalScoreDecoded30(decoded) != 0 || EnvironmentalScoreDecoded31(decoded) != 0 {
+		t.Fatal("zero impact produced a non-zero Environmental score")
+	}
+	if Roundup30(1) != 10 || Roundup30(1.01) != 11 || Roundup31(1) != 10 || Roundup31(1.01) != 11 {
+		t.Fatal("versioned roundup differs")
+	}
+}
+
 func checkTemporalScoring(t *testing.T) {
 	t.Helper()
 	for _, values := range [][3]byte{{'U', 'O', 'U'}, {'P', 'T', 'R'}, {'F', 'W', 'X'}, {'H', 'X', 'X'}} {
