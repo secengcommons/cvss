@@ -12,21 +12,41 @@ func TestRepresentationRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkRequiredRoundTrips(t, base)
+	checkOptionalRoundTrips(t, base)
+}
+
+func checkRequiredRoundTrips(t *testing.T, base Vector) {
+	t.Helper()
 	for index, values := range metricValues {
 		for _, value := range []byte(values) {
 			decoded := base.decode()
 			decoded.values[index] = value
-			if got := encodeVector(decoded).decode(); got != decoded {
+			vector := encodeVector(decoded)
+			if got := vector.decode(); got != decoded {
 				t.Fatalf("required %d value %q round trip = %#v, want %#v", index, value, got, decoded)
+			}
+			metric, found := vector.Metric(metricNames[index])
+			if !found || metric.Value != string(value) {
+				t.Fatalf("required %d value %q lookup = %#v, %t", index, value, metric, found)
 			}
 		}
 	}
+}
+
+func checkOptionalRoundTrips(t *testing.T, base Vector) {
+	t.Helper()
 	for index, values := range optionalValues {
 		for code := range values {
 			decoded := base.decode()
 			decoded.optional[index] = byte(code)
-			if got := encodeVector(decoded).decode(); got != decoded {
+			vector := encodeVector(decoded)
+			if got := vector.decode(); got != decoded {
 				t.Fatalf("optional %d code %d round trip = %#v, want %#v", index, code, got, decoded)
+			}
+			metric, found := vector.Metric(optionalNames[index])
+			if code == 0 && found || code > 0 && (!found || metric.Value != values[code]) {
+				t.Fatalf("optional %d code %d lookup = %#v, %t", index, code, metric, found)
 			}
 		}
 	}

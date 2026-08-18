@@ -4,10 +4,17 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/cticommons/cvss/internal/mixedradix"
 	"github.com/cticommons/cvss/internal/vectorinput"
 )
 
 func TestRepresentationRoundTrip(t *testing.T) {
+	checkBaseRoundTrips(t)
+	checkOptionalRoundTrips(t)
+}
+
+func checkBaseRoundTrips(t *testing.T) {
+	t.Helper()
 	for raw := range baseStateCount {
 		state := uint64(raw)
 		var decoded decodedVector
@@ -15,13 +22,24 @@ func TestRepresentationRoundTrip(t *testing.T) {
 			decoded.values[index] = values[state%uint64(len(values))][0]
 			state /= uint64(len(values))
 		}
-		if got := encodeVector(decoded).decode(); got != decoded {
+		vector := encodeVector(decoded)
+		if got := vector.decode(); got != decoded {
 			t.Fatalf("Base state %d round trip = %#v, want %#v", raw, got, decoded)
 		}
-		if got := encodeVector(decoded).baseTenths(); got != baseScore(decoded.values) {
+		if got := vector.baseTenths(); got != baseScore(decoded.values) {
 			t.Fatalf("Base state %d score = %d, want %d", raw, got, baseScore(decoded.values))
 		}
+		for index, name := range metricNames {
+			metric, found := vector.Metric(name)
+			if !found || metric.Value != metricValues[index][stateDigit(uint64(raw), index)] {
+				t.Fatalf("Base state %d metric %s = %#v, %t", raw, name, metric, found)
+			}
+		}
 	}
+}
+
+func checkOptionalRoundTrips(t *testing.T) {
+	t.Helper()
 	base, err := ParseBase("AV:N/AC:L/Au:N/C:C/I:C/A:C")
 	if err != nil {
 		t.Fatal(err)
@@ -30,11 +48,20 @@ func TestRepresentationRoundTrip(t *testing.T) {
 		for code := range len(values) {
 			decoded := base.decode()
 			decoded.optional[index] = byte(code)
-			if got := encodeVector(decoded).decode(); got != decoded {
+			vector := encodeVector(decoded)
+			if got := vector.decode(); got != decoded {
 				t.Fatalf("optional %d code %d round trip = %#v, want %#v", index, code, got, decoded)
+			}
+			metric, found := vector.Metric(optionalNames[index])
+			if code == 0 && found || code > 0 && (!found || metric.Value != optionalValue(index, byte(code))) {
+				t.Fatalf("optional %d code %d lookup = %#v, %t", index, code, metric, found)
 			}
 		}
 	}
+}
+
+func stateDigit(raw uint64, index int) uint64 {
+	return mixedradix.Digit(raw, baseStrides[index], uint64(len(metricValues[index])))
 }
 
 func TestRepresentationLayout(t *testing.T) {
