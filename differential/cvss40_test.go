@@ -56,10 +56,10 @@ func TestCVSS40ReferenceDifferential(t *testing.T) {
 
 	expected := qualificationCounts40{
 		valid:                     41270,
-		rawPandatix:               99,
-		correctedPandatix:         184,
-		nonRoundingPandatix:       62,
-		severityPandatix:          38,
+		rawPandatix:               61,
+		correctedPandatix:         146,
+		nonRoundingPandatix:       24,
+		severityPandatix:          0,
 		correctedSeverityPandatix: 0,
 	}
 	if counts != expected {
