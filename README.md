@@ -17,10 +17,11 @@ CVSS 1.0 is unsupported. It doesn't define an interoperable vector format precis
   - [Encoding](#encoding)
 - [Comparison with pandatix/go-cvss](#comparison-with-pandatixgo-cvss)
   - [Different priorities](#different-priorities)
-  - [CVSS 4.0 discrepancies](#cvss-40-discrepancies)
+  - [CVSS 4.0 defect report](#cvss-40-defect-report)
   - [Benchmark method](#benchmark-method)
   - [Benchmark results](#benchmark-results)
 - [Verification](#verification)
+- [Differential fuzzing](#differential-fuzzing)
 - [Help](#help)
 - [Licence](#licence)
 
@@ -132,18 +133,22 @@ This module keeps each version as a small concrete package and adds boundaries w
 
 Both libraries expose Impact and Exploitability subscores for CVSS 2.0 and 3.x. The relevant differences are the type and mutation contracts rather than the existence of those methods. Pandatix uses densely packed mutable fields and says its optimisation made the internals hard to read. CTI Commons also uses compact state but keeps representation mechanics separate from the scoring formulas. The hot paths remain ordinary Go without unsafe, generated masks, compiler directives or duplicated scoring implementations
 
-### CVSS 4.0 discrepancies
+### CVSS 4.0 defect report
 
 The retained qualification runs both implementations against the same pinned FIRST corpus and applies the 157 unique rounding corrections derived from the pinned Red Hat calculator revision. The corpus contains 66,298 records of which 41,270 are valid vectors
+
+CTI Commons identified a CVSS 4.0 scoring defect in Pandatix v0.6.2. Its zero-score shortcut examined Base impact before applying effective Modified metrics. Valid environmental vectors could therefore return zero when their Modified metrics had impact or return a score when those metrics removed all impact
+
+The finding was reported in [Pandatix issue 292](https://github.com/pandatix/go-cvss/issues/292). [PR 293](https://github.com/pandatix/go-cvss/pull/293) corrected the complete shortcut failure class in commit [`2c7a06cfa744`](https://github.com/pandatix/go-cvss/commit/2c7a06cfa7441c64f07beb8a6f875305fdd2d0d7). The correction was tagged as v0.6.3 and is included in v0.6.4
 
 Implementation | Raw FIRST scores | Corrected scores | Corrected severity disagreements
 --- | ---: | ---: | ---:
 CTI Commons | 41,111 matches before applying the retained corrections | 41,270 matches | 0
-Pandatix v0.6.2 | 41,171 matches | 41,086 matches | 38
+Pandatix v0.6.4 | 41,209 matches | 41,124 matches | 0
 
-Pandatix differs from 99 raw corpus scores. Sixty-two raw-score mismatches occur on corpus entries outside the retained rounding-correction set, so the discrepancy is not solely the known decimal-boundary issue. Against the corrected expectations it differs on 184 corpus occurrences. All 38 severity disagreements occur outside the retained correction set
+The upstream correction removed all 38 severity disagreements observed against v0.6.2. It reduced raw-score mismatches from 99 to 61 and corrected-score mismatches from 184 to 146. Twenty-four raw-score mismatches remain outside the retained rounding-correction set; the remaining differences concern decimal-boundary behaviour rather than the corrected zero-score shortcut
 
-The correction set and calculator source are digest-pinned in [`testdata/first/source.json`](testdata/first/source.json). [`TestCVSS40ReferenceDifferential`](differential/cvss40_test.go) reproduces the comparison. These counts qualify the retained corpus and Pandatix v0.6.2; they are not proof over every possible CVSS 4.0 vector
+The correction set and calculator source are digest-pinned in [`testdata/first/source.json`](testdata/first/source.json). [`TestCVSS40ReferenceDifferential`](differential/cvss40_test.go) reproduces the comparison. These counts qualify the retained corpus and Pandatix v0.6.4; they are not proof over every possible CVSS 4.0 vector
 
 The retained correction set can be regenerated from the pinned calculator source with:
 ```sh
@@ -152,11 +157,11 @@ go -C differential run ./cmd/cvss40-corrections -calculator <path-to-cvss40.js> 
 
 ### Benchmark method
 
-(18 August 2026) - The comparison uses:
+(22 August 2026) - The comparison uses:
 - Linux AMD64
 - 13th Gen Intel Core i5-13400F
 - Go 1.26.6
-- Pandatix v0.6.2
+- Pandatix v0.6.4
 - identical vectors for both implementations
 - five isolated 150 ms samples per implementation and operation
 - separate benchmark processes with alternating implementation order
@@ -170,43 +175,43 @@ Setup and parsing are outside lookup, replacement, encoding and scoring timers. 
 
 Operation | CTI Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 Base | 40.43 ns, 0 B, 0 allocs | 157.90 ns, 4 B, 1 alloc | CTI Commons 3.91x faster
-CVSS 3.0 Base | 54.13 ns, 0 B, 0 allocs | 120.40 ns, 8 B, 1 alloc | CTI Commons 2.22x faster
-CVSS 3.1 Base | 52.81 ns, 0 B, 0 allocs | 122.80 ns, 8 B, 1 alloc | CTI Commons 2.33x faster
-CVSS 4.0 Base | 86.07 ns, 0 B, 0 allocs | 274.50 ns, 16 B, 1 alloc | CTI Commons 3.19x faster
-CVSS 2.0 complete | 169.30 ns, 0 B, 0 allocs | 367.80 ns, 4 B, 1 alloc | CTI Commons 2.17x faster
-CVSS 3.0 complete | 148.30 ns, 0 B, 0 allocs | 440.30 ns, 8 B, 1 alloc | CTI Commons 2.97x faster
-CVSS 3.1 complete | 151.50 ns, 0 B, 0 allocs | 434.90 ns, 8 B, 1 alloc | CTI Commons 2.87x faster
-CVSS 4.0 complete | 165.40 ns, 0 B, 0 allocs | 380.00 ns, 16 B, 1 alloc | CTI Commons 2.30x faster
+CVSS 2.0 Base | 44.14 ns, 0 B, 0 allocs | 169.20 ns, 4 B, 1 alloc | CTI Commons 3.83x faster
+CVSS 3.0 Base | 57.19 ns, 0 B, 0 allocs | 137.30 ns, 8 B, 1 alloc | CTI Commons 2.40x faster
+CVSS 3.1 Base | 57.18 ns, 0 B, 0 allocs | 142.50 ns, 8 B, 1 alloc | CTI Commons 2.49x faster
+CVSS 4.0 Base | 91.78 ns, 0 B, 0 allocs | 291.90 ns, 16 B, 1 alloc | CTI Commons 3.18x faster
+CVSS 2.0 complete | 176.90 ns, 0 B, 0 allocs | 376.60 ns, 4 B, 1 alloc | CTI Commons 2.13x faster
+CVSS 3.0 complete | 172.60 ns, 0 B, 0 allocs | 491.00 ns, 8 B, 1 alloc | CTI Commons 2.84x faster
+CVSS 3.1 complete | 169.70 ns, 0 B, 0 allocs | 504.20 ns, 8 B, 1 alloc | CTI Commons 2.97x faster
+CVSS 4.0 complete | 184.50 ns, 0 B, 0 allocs | 413.00 ns, 16 B, 1 alloc | CTI Commons 2.24x faster
 
 **Canonical string encoding:**
 
 Version | CTI Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 | 44.03 ns, 32 B, 1 alloc | 107.60 ns, 32 B, 1 alloc | CTI Commons 2.44x faster
-CVSS 3.0 | 46.16 ns, 48 B, 1 alloc | 127.70 ns, 48 B, 1 alloc | CTI Commons 2.77x faster
-CVSS 3.1 | 45.40 ns, 48 B, 1 alloc | 124.40 ns, 48 B, 1 alloc | CTI Commons 2.74x faster
-CVSS 4.0 | 122.40 ns, 64 B, 1 alloc | 201.20 ns, 64 B, 1 alloc | CTI Commons 1.64x faster
+CVSS 2.0 | 47.37 ns, 32 B, 1 alloc | 117.50 ns, 32 B, 1 alloc | CTI Commons 2.48x faster
+CVSS 3.0 | 52.75 ns, 48 B, 1 alloc | 151.50 ns, 48 B, 1 alloc | CTI Commons 2.87x faster
+CVSS 3.1 | 51.53 ns, 48 B, 1 alloc | 152.50 ns, 48 B, 1 alloc | CTI Commons 2.96x faster
+CVSS 4.0 | 130.50 ns, 64 B, 1 alloc | 214.00 ns, 64 B, 1 alloc | CTI Commons 1.64x faster
 
 **Lookup, replacement and scoring:**
 
 Operation | CTI Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 lookup | 2.38 ns | 1.97 ns | Pandatix 1.21x faster
-CVSS 3.0 lookup | 4.16 ns | 2.65 ns | Pandatix 1.57x faster
-CVSS 3.1 lookup | 4.06 ns | 2.70 ns | Pandatix 1.50x faster
-CVSS 4.0 lookup | 3.07 ns | 2.98 ns | Near parity
-CVSS 2.0 replacement | 5.44 ns | 9.85 ns | CTI Commons 1.81x faster
-CVSS 3.0 replacement | 10.64 ns | 5.21 ns | Pandatix 2.04x faster
-CVSS 3.1 replacement | 10.83 ns | 4.89 ns | Pandatix 2.21x faster
-CVSS 4.0 replacement | 6.07 ns | 3.04 ns | Pandatix 2.00x faster
-CVSS 2.0 Environmental score | 25.46 ns | 18.32 ns | Pandatix 1.39x faster
-CVSS 3.0 Environmental score | 48.05 ns | 21.67 ns | Pandatix 2.22x faster
-CVSS 3.1 Environmental score | 47.74 ns | 21.89 ns | Pandatix 2.18x faster
-CVSS 2.0 Base score | 1.31 ns | 8.30 ns | CTI Commons 6.35x faster
-CVSS 3.0 Base score | 2.39 ns | 9.30 ns | CTI Commons 3.89x faster
-CVSS 3.1 Base score | 2.33 ns | 8.94 ns | CTI Commons 3.84x faster
-CVSS 4.0 score | 124.10 ns | 914.80 ns | CTI Commons 7.37x faster
+CVSS 2.0 lookup | 2.50 ns | 2.05 ns | Pandatix 1.22x faster
+CVSS 3.0 lookup | 3.26 ns | 2.75 ns | Pandatix 1.19x faster
+CVSS 3.1 lookup | 3.25 ns | 2.77 ns | Pandatix 1.17x faster
+CVSS 4.0 lookup | 3.34 ns | 3.14 ns | Pandatix 1.06x faster
+CVSS 2.0 replacement | 5.77 ns | 10.55 ns | CTI Commons 1.83x faster
+CVSS 3.0 replacement | 11.42 ns | 5.30 ns | Pandatix 2.16x faster
+CVSS 3.1 replacement | 10.75 ns | 5.22 ns | Pandatix 2.06x faster
+CVSS 4.0 replacement | 6.55 ns | 3.24 ns | Pandatix 2.02x faster
+CVSS 2.0 Environmental score | 26.63 ns | 18.55 ns | Pandatix 1.44x faster
+CVSS 3.0 Environmental score | 40.77 ns | 21.45 ns | Pandatix 1.90x faster
+CVSS 3.1 Environmental score | 42.23 ns | 21.82 ns | Pandatix 1.94x faster
+CVSS 2.0 Base score | 1.38 ns | 8.56 ns | CTI Commons 6.22x faster
+CVSS 3.0 Base score | 2.46 ns | 9.43 ns | CTI Commons 3.83x faster
+CVSS 3.1 Base score | 2.46 ns | 9.97 ns | CTI Commons 4.06x faster
+CVSS 4.0 score | 132.60 ns | 292.40 ns | CTI Commons 2.21x faster
 
 Every operation in the final table reports 0 B/op and 0 allocs/op for both libraries
 
@@ -243,8 +248,6 @@ The retained test data binds the scoring code to published FIRST material:
 
 The dev gate also runs strict linting, go vet, vulnerability checks, race tests, native fuzzing, formula mutations and 100% first-party statement coverage. Deterministic allocation tests require zero allocations from the documented parsing, lookup, replacement, caller-buffer encoding and scoring paths. Exhaustive representation tests bind every CVSS 2.0 Base state and every CVSS 4.0 metric value to public lookup results
 
-An isolated [differential test module](differential) fuzzes canonical CVSS 2.0, 3.0 and 3.1 Base vectors against Pandatix v0.6.2
-
 Run the complete gate with:
 ```sh
 bash ./.github/scripts/verify.sh all
@@ -253,6 +256,19 @@ bash ./.github/scripts/verify.sh all
 Run benchmarks with:
 ```sh
 bash ./.github/scripts/verify.sh benchmark
+```
+
+## Differential fuzzing
+
+The isolated [`differential`](differential) module compares CTI Commons with Pandatix v0.6.4 without adding Pandatix to the production module graph
+
+Native fuzz targets generate CVSS 2.0, 3.0 and 3.1 Base inputs. Inputs accepted by CTI Commons are encoded canonically, parsed by Pandatix then required to produce the same Base score. CVSS 4.0 uses the complete retained FIRST corpus and correction set because the implementations have documented score differences
+
+The production module supports Go 1.24 and later. Pandatix v0.6.4 requires Go 1.25, so the isolated differential module is qualified with Go 1.25 and 1.26
+
+Run the bounded campaign with:
+```sh
+bash ./.github/scripts/verify.sh campaign
 ```
 
 ## Help
