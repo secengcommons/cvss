@@ -64,7 +64,6 @@ type Vector struct {
 	state uint64
 }
 
-// Stored in exact tenths
 type Score struct {
 	tenths int
 }
@@ -197,7 +196,6 @@ func textLength(decoded decodedVector) int {
 	return length
 }
 
-// Output is canonical
 func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.Valid() {
 		return text, ErrInvalidVector
@@ -205,10 +203,8 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	return appendText(text, vector.decode()), nil
 }
 
-// Output is canonical
 func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(nil) }
 
-// Output is a canonical JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
 	if !vector.Valid() {
 		return nil, ErrInvalidVector
@@ -239,7 +235,6 @@ func appendText(text []byte, decoded decodedVector) []byte {
 	return text
 }
 
-// Mandatory order
 func (vector Vector) Metrics() [11]Metric {
 	var metrics [11]Metric
 	if !vector.Valid() {
@@ -252,7 +247,6 @@ func (vector Vector) Metrics() [11]Metric {
 	return metrics
 }
 
-// Defined metrics in mandatory order
 func (vector Vector) OptionalMetrics() []Metric {
 	if !vector.Valid() {
 		return nil
@@ -270,7 +264,6 @@ func (vector Vector) OptionalMetrics() []Metric {
 	return appendOptionalMetrics(make([]Metric, 0, count), decoded)
 }
 
-// Appended in mandatory order
 func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
 	if !vector.Valid() {
 		return metrics, ErrInvalidVector
@@ -309,7 +302,6 @@ func (vector Vector) Nomenclature() string {
 	}
 }
 
-// True only for vectors produced by validated operations
 func (vector Vector) Valid() bool {
 	return vector.state != 0
 }
@@ -322,6 +314,7 @@ func (vector Vector) Score() (Score, error) {
 	if noImpact(effective.metrics) {
 		return Score{}, nil
 	}
+	// The specification interpolates from a macrovector score by the normalised distance from its highest-severity vector
 	eq := equivalence(effective)
 	current := macroScore(eq)
 	lower := lowerScores(eq)
@@ -351,6 +344,7 @@ type scoringValues struct {
 
 func (vector Vector) effective() scoringValues {
 	decoded := vector.decode()
+	// Undefined threat and requirement metrics use the specification defaults before modified metrics replace Base values
 	values := scoringValues{metrics: decoded.values, exploitation: 'A', requirements: [3]byte{'H', 'H', 'H'}}
 	if defined(decoded.optional[threatMetricIndex]) {
 		values.exploitation = optionalValue(threatMetricIndex, decoded.optional[threatMetricIndex])[0]
@@ -374,12 +368,10 @@ func (score Score) Tenths() int { return score.tenths }
 
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
-// One decimal place
 func (score Score) AppendText(text []byte) []byte {
 	return scoretext.AppendText(text, score.tenths)
 }
 
-// One decimal place
 func (score Score) String() string { return scoretext.String(score.tenths) }
 
 // Specification rating in uppercase
@@ -488,6 +480,7 @@ func noImpact(values [11]byte) bool {
 type macroVector [6]int
 
 func equivalence(values scoringValues) macroVector {
+	// Six equivalence digits select one of the specification's 270 macrovector score classes
 	return macroVector{
 		equivalence1(values.metrics),
 		equivalence2(values.metrics),
@@ -602,6 +595,7 @@ func buildLowerScoreTable() [len(macroScores)]scoreDifferences {
 }
 
 func calculateLowerScores(eq macroVector, current int) scoreDifferences {
+	// Only populated lower-severity classes contribute to the interpolation denominator
 	var result scoreDifferences
 	for _, index := range []int{0, 1, 3, 4} {
 		limits := [...]int{2, 1, 0, 2, 2}

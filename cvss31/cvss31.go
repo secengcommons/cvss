@@ -29,7 +29,6 @@ type Vector struct {
 	state cvss3.State
 }
 
-// Stored in exact tenths
 type Score struct {
 	tenths int
 }
@@ -64,7 +63,6 @@ func (vector Vector) String() string {
 	return string(cvss3.AppendText(buffer[:0], prefix, vector.state))
 }
 
-// Output is canonical
 func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.Valid() {
 		return text, ErrInvalidVector
@@ -72,10 +70,8 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	return cvss3.AppendText(text, prefix, vector.state), nil
 }
 
-// Output is canonical
 func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(nil) }
 
-// Output is a canonical JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
 	if !vector.Valid() {
 		return nil, ErrInvalidVector
@@ -86,7 +82,6 @@ func (vector Vector) MarshalJSON() ([]byte, error) {
 	return append(text, '"'), nil
 }
 
-// Preferred order
 func (vector Vector) Metrics() [8]Metric {
 	var metrics [8]Metric
 	if !vector.Valid() {
@@ -99,7 +94,6 @@ func (vector Vector) Metrics() [8]Metric {
 	return metrics
 }
 
-// Defined metrics in preferred order
 func (vector Vector) OptionalMetrics() []Metric {
 	if !vector.Valid() {
 		return nil
@@ -117,7 +111,6 @@ func (vector Vector) OptionalMetrics() []Metric {
 	return appendOptionalMetrics(make([]Metric, 0, count), decoded)
 }
 
-// Appended in preferred order
 func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
 	if !vector.Valid() {
 		return metrics, ErrInvalidVector
@@ -134,7 +127,6 @@ func appendOptionalMetrics(metrics []Metric, decoded decodedVector) []Metric {
 	return metrics
 }
 
-// True only for vectors produced by validated operations
 func (vector Vector) Valid() bool { return vector.state.Valid() }
 func (vector Vector) BaseScore() (Score, error) {
 	if !vector.Valid() {
@@ -204,12 +196,10 @@ func (score Score) Tenths() int { return score.tenths }
 
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
-// One decimal place
 func (score Score) AppendText(text []byte) []byte {
 	return scoretext.AppendText(text, score.tenths)
 }
 
-// One decimal place
 func (score Score) String() string { return scoretext.String(score.tenths) }
 
 // Specification rating in uppercase

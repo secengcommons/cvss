@@ -184,6 +184,7 @@ func (result *builder) state() State { return encodeState(result.raw + 1) }
 func (state State) Valid() bool { return state != State{} }
 
 func (state State) Raw() uint64 {
+	// Five little-endian bytes retain the mixed-radix state; one is removed to restore the zero-based digits
 	encoded := uint64(state.encoded[0]) |
 		uint64(state.encoded[1])<<8 |
 		uint64(state.encoded[2])<<16 |
@@ -200,6 +201,7 @@ func BaseState(raw uint64) State {
 }
 
 func (state State) Decode() Decoded {
+	// Digits are consumed least-significant first in the shared CVSS 3 metric order
 	raw := state.Raw()
 	return Decoded{
 		Values: [BaseMetricCount]byte{
@@ -220,7 +222,7 @@ func (state State) Decode() Decoded {
 	}
 }
 
-// Kept local because cross-package pointer consumption measurably slows parsing
+// Consumes one mixed-radix digit in place and remains local because cross-package pointer consumption measurably slows parsing
 func takeDigit(raw *uint64, radix uint64) uint64 {
 	digit := *raw % radix
 	*raw /= radix
