@@ -27,6 +27,7 @@ type decodedVector struct {
 	optional [21]byte
 }
 
+// Mixed-radix packing is offset by one so zero remains invalid
 type stateBuilder struct {
 	raw          uint64
 	optionalSeen bool
@@ -64,6 +65,7 @@ func encodeVector(decoded decodedVector) Vector {
 }
 
 func (vector Vector) decode() decodedVector {
+	// Digits are consumed least-significant first in mandatory metric order
 	raw := vector.state - 1
 	return decodedVector{
 		values: [11]byte{
@@ -85,7 +87,7 @@ func (vector Vector) decode() decodedVector {
 	}
 }
 
-// Kept local because cross-package pointer consumption measurably slows parsing
+// Consumes one mixed-radix digit in place and remains local because cross-package pointer consumption measurably slows parsing
 func takeDigit(raw *uint64, radix uint64) uint64 {
 	digit := *raw % radix
 	*raw /= radix
@@ -95,6 +97,7 @@ func takeDigit(raw *uint64, radix uint64) uint64 {
 const digitBytes = "\x00\x01\x02\x03\x04"
 
 func baseMetricValue(raw uint64, name string) (string, bool) {
+	// Divisors are cumulative base-metric radices and keep lookup allocation-free
 	var value byte
 	switch name {
 	case "AV":

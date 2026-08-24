@@ -48,6 +48,7 @@ func modifiedImpact(metrics [BaseMetricCount]byte, optional [OptionalMetricCount
 	if metrics[ScopeIndex] != 'C' {
 		return 6.42 * miss
 	}
+	// CVSS 3.1 changes the Scope-changed exponent and scales MISS before applying it
 	if version31 {
 		return 7.52*(miss-.029) - 3.25*pow13(miss*.9731-.02)
 	}
@@ -87,6 +88,7 @@ func environmentalScore(decoded Decoded, version31 bool) int {
 	if metrics[ScopeIndex] == 'C' {
 		raw *= 1.08
 	}
+	// Modified Base is rounded before the Temporal weights as required by both CVSS 3 specifications
 	modifiedBase := float64(roundup(Clamp(raw, 10), version31)) / 10
 	return roundup(modifiedBase*TemporalWeight(decoded.Optional), version31)
 }
@@ -96,6 +98,7 @@ func Roundup30(value float64) int { return roundup(value, false) }
 func Roundup31(value float64) int { return roundup(value, true) }
 
 func roundup(value float64, version31 bool) int {
+	// CVSS 3.1 rounds at five decimal places before Roundup while CVSS 3.0 rounds any fractional tenth upward
 	if version31 {
 		return (int(value*100000+.5) + 9999) / 10000
 	}
@@ -108,6 +111,7 @@ func roundup(value float64, version31 bool) int {
 }
 
 func pow13(value float64) float64 {
+	// Fixed multiplication retains the exact integer exponent without math.Pow on the scoring path
 	squared := value * value
 	fourth := squared * squared
 	eighth := fourth * fourth

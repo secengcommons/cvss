@@ -45,7 +45,6 @@ type Vector struct {
 	state uint32
 }
 
-// Stored in exact tenths
 type Score struct {
 	tenths int
 }
@@ -180,7 +179,6 @@ func textLength(decoded decodedVector) int {
 	return length
 }
 
-// Output is canonical
 func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	if !vector.Valid() {
 		return text, ErrInvalidVector
@@ -188,10 +186,8 @@ func (vector Vector) AppendText(text []byte) ([]byte, error) {
 	return appendText(text, vector.decode()), nil
 }
 
-// Output is canonical
 func (vector Vector) MarshalText() ([]byte, error) { return vector.AppendText(nil) }
 
-// Output is a canonical JSON string
 func (vector Vector) MarshalJSON() ([]byte, error) {
 	if !vector.Valid() {
 		return nil, ErrInvalidVector
@@ -242,7 +238,6 @@ func writeMetrics(text *strings.Builder, values [8]byte) {
 	}
 }
 
-// Specification order
 func (vector Vector) Metrics() [6]Metric {
 	var metrics [6]Metric
 	if !vector.Valid() {
@@ -255,7 +250,6 @@ func (vector Vector) Metrics() [6]Metric {
 	return metrics
 }
 
-// Defined metrics in specification order
 func (vector Vector) OptionalMetrics() []Metric {
 	if !vector.Valid() {
 		return nil
@@ -273,7 +267,6 @@ func (vector Vector) OptionalMetrics() []Metric {
 	return appendOptionalMetrics(make([]Metric, 0, count), decoded)
 }
 
-// Appended in specification order
 func (vector Vector) AppendOptionalMetrics(metrics []Metric) ([]Metric, error) {
 	if !vector.Valid() {
 		return metrics, ErrInvalidVector
@@ -290,7 +283,6 @@ func appendOptionalMetrics(metrics []Metric, decoded decodedVector) []Metric {
 	return metrics
 }
 
-// True only for vectors produced by validated operations
 func (vector Vector) Valid() bool { return vector.state != 0 }
 
 func (vector Vector) BaseScore() (Score, error) {
@@ -318,6 +310,7 @@ func (vector Vector) EnvironmentalScore() (Score, error) {
 func environmentalScore(decoded decodedVector) Score {
 	adjusted := adjustedImpact(decoded.values, decoded.optional)
 	adjustedBase := baseFromImpact(decoded.values, adjusted)
+	// Adjusted Temporal is rounded before Collateral Damage and Target Distribution are applied
 	adjustedTemporal := temporalScore(adjustedBase, decoded.optional)
 	value := (float64(adjustedTemporal)/10 + (10-float64(adjustedTemporal)/10)*damageWeight(decoded.optional[collateralDamageIndex])) * distributionWeight(decoded.optional[targetDistributionIndex])
 	return Score{tenths: round(value)}
@@ -497,12 +490,10 @@ func (score Score) Tenths() int { return score.tenths }
 
 func (score Score) Float64() float64 { return float64(score.tenths) / 10 }
 
-// One decimal place
 func (score Score) AppendText(text []byte) []byte {
 	return scoretext.AppendText(text, score.tenths)
 }
 
-// One decimal place
 func (score Score) String() string { return scoretext.String(score.tenths) }
 
 func round(value float64) int { return int(value*10 + .5) }

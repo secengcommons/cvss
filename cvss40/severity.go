@@ -32,6 +32,7 @@ var highestEQ3EQ6 = [][][][]int{
 	},
 }
 
+// Searches the specification's highest-severity vectors for the first vector dominated by the effective metrics
 func severityDistances(values scoringValues, eq macroVector) [5]float64 {
 	actual := [14]int{
 		rank(values.metrics[attackVectorIndex], "NALP"), rank(values.metrics[attackComplexityIndex], "LH"), rank(values.metrics[attackRequirementsIndex], "NP"),
@@ -89,6 +90,7 @@ func dominates(actual, candidate [14]int) bool {
 }
 
 func depth(group int, eq macroVector) int {
+	// Depths are the specification-defined maximum severity distances for each equivalence group
 	switch group {
 	case 0:
 		return [...]int{0, 3, 4}[eq[0]]
