@@ -1,6 +1,6 @@
 package cvss31
 
-import "github.com/cticommons/cvss/internal/cvss3"
+import "github.com/secengcommons/cvss/internal/cvss3"
 
 const baseStateCount = cvss3.BaseStateCount
 

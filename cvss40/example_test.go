@@ -3,7 +3,7 @@ package cvss40_test
 import (
 	"fmt"
 
-	"github.com/cticommons/cvss/cvss40"
+	"github.com/secengcommons/cvss/cvss40"
 )
 
 func ExampleParse() {

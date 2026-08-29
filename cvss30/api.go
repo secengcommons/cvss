@@ -1,9 +1,9 @@
 package cvss30
 
 import (
-	"github.com/cticommons/cvss/internal/cvss3"
-	"github.com/cticommons/cvss/internal/metricvalue"
-	"github.com/cticommons/cvss/internal/vectorinput"
+	"github.com/secengcommons/cvss/internal/cvss3"
+	"github.com/secengcommons/cvss/internal/metricvalue"
+	"github.com/secengcommons/cvss/internal/vectorinput"
 )
 
 // False for absent or unknown metrics

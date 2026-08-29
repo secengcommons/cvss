@@ -3,7 +3,7 @@ package cvss31
 import (
 	"testing"
 
-	"github.com/cticommons/cvss/internal/cvss3"
+	"github.com/secengcommons/cvss/internal/cvss3"
 )
 
 var (

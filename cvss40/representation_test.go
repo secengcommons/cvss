@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/cticommons/cvss/internal/vectorinput"
+	"github.com/secengcommons/cvss/internal/vectorinput"
 )
 
 func TestRepresentationRoundTrip(t *testing.T) {

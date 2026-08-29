@@ -3,10 +3,10 @@ package cvss30
 import (
 	"errors"
 
-	"github.com/cticommons/cvss/internal/cvss3"
-	"github.com/cticommons/cvss/internal/metricvalue"
-	scoretext "github.com/cticommons/cvss/internal/score"
-	"github.com/cticommons/cvss/internal/vectorinput"
+	"github.com/secengcommons/cvss/internal/cvss3"
+	"github.com/secengcommons/cvss/internal/metricvalue"
+	scoretext "github.com/secengcommons/cvss/internal/score"
+	"github.com/secengcommons/cvss/internal/vectorinput"
 )
 
 const (

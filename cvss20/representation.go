@@ -1,6 +1,6 @@
 package cvss20
 
-import "github.com/cticommons/cvss/internal/mixedradix"
+import "github.com/secengcommons/cvss/internal/mixedradix"
 
 const baseStateCount = 3 * 3 * 3 * 3 * 3 * 3
 

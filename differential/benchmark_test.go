@@ -3,27 +3,27 @@ package differential
 import (
 	"testing"
 
-	cti30 "github.com/cticommons/cvss/cvss30"
-	cti31 "github.com/cticommons/cvss/cvss31"
 	pandatix30 "github.com/pandatix/go-cvss/30"
 	pandatix31 "github.com/pandatix/go-cvss/31"
+	sec30 "github.com/secengcommons/cvss/cvss30"
+	sec31 "github.com/secengcommons/cvss/cvss31"
 )
 
 var (
 	benchmarkMetric      string
-	benchmarkCTI30       cti30.Vector
-	benchmarkCTI31       cti31.Vector
+	benchmarkSecEng30    sec30.Vector
+	benchmarkSecEng31    sec31.Vector
 	benchmarkPandatix30  *pandatix30.CVSS30
 	benchmarkPandatix31  *pandatix31.CVSS31
-	benchmarkCTIScore    int
+	benchmarkSecEngScore int
 	benchmarkLegacyScore float64
 	benchmarkError       error
 )
 
 func BenchmarkMetricLookup30(b *testing.B) {
 	ours, theirs := benchmarkVectors30(b, "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")
-	b.Run("CTICommons", func(b *testing.B) {
-		var metric cti30.Metric
+	b.Run("SecEngCommons", func(b *testing.B) {
+		var metric sec30.Metric
 		for b.Loop() {
 			metric, _ = ours.Metric("AC")
 		}
@@ -41,13 +41,13 @@ func BenchmarkMetricLookup30(b *testing.B) {
 
 func BenchmarkMetricReplacement30(b *testing.B) {
 	ours, theirs := benchmarkVectors30(b, "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")
-	b.Run("CTICommons", func(b *testing.B) {
-		var vector cti30.Vector
+	b.Run("SecEngCommons", func(b *testing.B) {
+		var vector sec30.Vector
 		var err error
 		for b.Loop() {
-			vector, err = ours.WithMetric(cti30.Metric{Name: "AC", Value: "H"})
+			vector, err = ours.WithMetric(sec30.Metric{Name: "AC", Value: "H"})
 		}
-		benchmarkCTI30, benchmarkError = vector, err
+		benchmarkSecEng30, benchmarkError = vector, err
 	})
 	b.Run("Pandatix", func(b *testing.B) {
 		var err error
@@ -61,13 +61,13 @@ func BenchmarkMetricReplacement30(b *testing.B) {
 func BenchmarkEnvironmentalScore30(b *testing.B) {
 	const vector = "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N/E:F/RL:O/RC:C/CR:L/IR:M/AR:H/MAV:A/MAC:H/MPR:L/MUI:R/MS:U/MC:L/MI:H/MA:N"
 	ours, theirs := benchmarkVectors30(b, vector)
-	b.Run("CTICommons", func(b *testing.B) {
-		var score cti30.Score
+	b.Run("SecEngCommons", func(b *testing.B) {
+		var score sec30.Score
 		var err error
 		for b.Loop() {
 			score, err = ours.EnvironmentalScore()
 		}
-		benchmarkCTIScore, benchmarkError = score.Tenths(), err
+		benchmarkSecEngScore, benchmarkError = score.Tenths(), err
 	})
 	b.Run("Pandatix", func(b *testing.B) {
 		var score float64
@@ -80,8 +80,8 @@ func BenchmarkEnvironmentalScore30(b *testing.B) {
 
 func BenchmarkMetricLookup31(b *testing.B) {
 	ours, theirs := benchmarkVectors31(b, "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")
-	b.Run("CTICommons", func(b *testing.B) {
-		var metric cti31.Metric
+	b.Run("SecEngCommons", func(b *testing.B) {
+		var metric sec31.Metric
 		for b.Loop() {
 			metric, _ = ours.Metric("AC")
 		}
@@ -99,13 +99,13 @@ func BenchmarkMetricLookup31(b *testing.B) {
 
 func BenchmarkMetricReplacement31(b *testing.B) {
 	ours, theirs := benchmarkVectors31(b, "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")
-	b.Run("CTICommons", func(b *testing.B) {
-		var vector cti31.Vector
+	b.Run("SecEngCommons", func(b *testing.B) {
+		var vector sec31.Vector
 		var err error
 		for b.Loop() {
-			vector, err = ours.WithMetric(cti31.Metric{Name: "AC", Value: "H"})
+			vector, err = ours.WithMetric(sec31.Metric{Name: "AC", Value: "H"})
 		}
-		benchmarkCTI31, benchmarkError = vector, err
+		benchmarkSecEng31, benchmarkError = vector, err
 	})
 	b.Run("Pandatix", func(b *testing.B) {
 		var err error
@@ -119,13 +119,13 @@ func BenchmarkMetricReplacement31(b *testing.B) {
 func BenchmarkEnvironmentalScore31(b *testing.B) {
 	const vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N/E:F/RL:O/RC:C/CR:L/IR:M/AR:H/MAV:A/MAC:H/MPR:L/MUI:R/MS:U/MC:L/MI:H/MA:N"
 	ours, theirs := benchmarkVectors31(b, vector)
-	b.Run("CTICommons", func(b *testing.B) {
-		var score cti31.Score
+	b.Run("SecEngCommons", func(b *testing.B) {
+		var score sec31.Score
 		var err error
 		for b.Loop() {
 			score, err = ours.EnvironmentalScore()
 		}
-		benchmarkCTIScore, benchmarkError = score.Tenths(), err
+		benchmarkSecEngScore, benchmarkError = score.Tenths(), err
 	})
 	b.Run("Pandatix", func(b *testing.B) {
 		var score float64
@@ -136,9 +136,9 @@ func BenchmarkEnvironmentalScore31(b *testing.B) {
 	})
 }
 
-func benchmarkVectors30(b *testing.B, text string) (cti30.Vector, *pandatix30.CVSS30) {
+func benchmarkVectors30(b *testing.B, text string) (sec30.Vector, *pandatix30.CVSS30) {
 	b.Helper()
-	ours, err := cti30.Parse(text)
+	ours, err := sec30.Parse(text)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -149,9 +149,9 @@ func benchmarkVectors30(b *testing.B, text string) (cti30.Vector, *pandatix30.CV
 	return ours, theirs
 }
 
-func benchmarkVectors31(b *testing.B, text string) (cti31.Vector, *pandatix31.CVSS31) {
+func benchmarkVectors31(b *testing.B, text string) (sec31.Vector, *pandatix31.CVSS31) {
 	b.Helper()
-	ours, err := cti31.Parse(text)
+	ours, err := sec31.Parse(text)
 	if err != nil {
 		b.Fatal(err)
 	}

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cticommons/cvss/internal/cvss3"
-	"github.com/cticommons/cvss/internal/testfixture"
+	"github.com/secengcommons/cvss/internal/cvss3"
+	"github.com/secengcommons/cvss/internal/testfixture"
 )
 
 func TestPublishedBaseVectors(t *testing.T) {

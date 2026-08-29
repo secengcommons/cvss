@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/cticommons/cvss/internal/vectorinput"
+	"github.com/secengcommons/cvss/internal/vectorinput"
 )
 
 func TestMetricLookup(t *testing.T) {

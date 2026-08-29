@@ -1,5 +1,5 @@
 <div align="center">
-	<h1>CTI Commons CVSS</h1>
+  <h1>Security Engineering Commons CVSS</h1>
   Lightning-fast, low allocation, idiomatic CVSS parsing and scoring for Go
 </div>
 <br>
@@ -46,7 +46,7 @@ CVSS 2.0, 3.0 and 3.1 also expose the specification-defined Impact and Exploitab
 
 ## Install
 ```sh
-go get github.com/cticommons/cvss
+go get github.com/secengcommons/cvss
 ```
 
 Note that Go 1.24 or greater is required
@@ -59,7 +59,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cticommons/cvss/cvss31"
+	"github.com/secengcommons/cvss/cvss31"
 )
 
 func main() {
@@ -131,19 +131,19 @@ This module keeps each version as a small concrete package and adds boundaries w
 - a root version detector which validates the complete vector
 - no runtime or production-module dependencies
 
-Both libraries expose Impact and Exploitability subscores for CVSS 2.0 and 3.x. The relevant differences are the type and mutation contracts rather than the existence of those methods. Pandatix uses densely packed mutable fields and says its optimisation made the internals hard to read. CTI Commons also uses compact state but keeps representation mechanics separate from the scoring formulas. The hot paths remain ordinary Go without unsafe, generated masks, compiler directives or duplicated scoring implementations
+Both libraries expose Impact and Exploitability subscores for CVSS 2.0 and 3.x. The relevant differences are the type and mutation contracts rather than the existence of those methods. Pandatix uses densely packed mutable fields and says its optimisation made the internals hard to read. Security Engineering Commons also uses compact state but keeps representation mechanics separate from the scoring formulas. The hot paths remain ordinary Go without unsafe, generated masks, compiler directives or duplicated scoring implementations
 
 ### CVSS 4.0 defect report
 
 The retained qualification runs both implementations against the same pinned FIRST corpus and applies the 157 unique rounding corrections derived from the pinned Red Hat calculator revision. The corpus contains 66,298 records of which 41,270 are valid vectors
 
-CTI Commons identified a CVSS 4.0 scoring defect in Pandatix v0.6.2. Its zero-score shortcut examined Base impact before applying effective Modified metrics. Valid environmental vectors could therefore return zero when their Modified metrics had impact or return a score when those metrics removed all impact
+Security Engineering Commons identified a CVSS 4.0 scoring defect in Pandatix v0.6.2. Its zero-score shortcut examined Base impact before applying effective Modified metrics. Valid environmental vectors could therefore return zero when their Modified metrics had impact or return a score when those metrics removed all impact
 
 The finding was reported in [Pandatix issue 292](https://github.com/pandatix/go-cvss/issues/292). [PR 293](https://github.com/pandatix/go-cvss/pull/293) corrected the complete shortcut failure class in commit [`2c7a06cfa744`](https://github.com/pandatix/go-cvss/commit/2c7a06cfa7441c64f07beb8a6f875305fdd2d0d7). The correction was tagged as v0.6.3 and is included in v0.6.4
 
 Implementation | Raw FIRST scores | Corrected scores | Corrected severity disagreements
 --- | ---: | ---: | ---:
-CTI Commons | 41,111 matches before applying the retained corrections | 41,270 matches | 0
+Security Engineering Commons | 41,111 matches before applying the retained corrections | 41,270 matches | 0
 Pandatix v0.6.4 | 41,209 matches | 41,124 matches | 0
 
 The upstream correction removed all 38 severity disagreements observed against v0.6.2. It reduced raw-score mismatches from 99 to 61 and corrected-score mismatches from 184 to 146. Twenty-four raw-score mismatches remain outside the retained rounding-correction set; the remaining differences concern decimal-boundary behaviour rather than the corrected zero-score shortcut
@@ -173,57 +173,57 @@ Setup and parsing are outside lookup, replacement, encoding and scoring timers. 
 
 **Parsing:**
 
-Operation | CTI Commons | Pandatix | Relative result
+Operation | Security Engineering Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 Base | 44.14 ns, 0 B, 0 allocs | 169.20 ns, 4 B, 1 alloc | CTI Commons 3.83x faster
-CVSS 3.0 Base | 57.19 ns, 0 B, 0 allocs | 137.30 ns, 8 B, 1 alloc | CTI Commons 2.40x faster
-CVSS 3.1 Base | 57.18 ns, 0 B, 0 allocs | 142.50 ns, 8 B, 1 alloc | CTI Commons 2.49x faster
-CVSS 4.0 Base | 91.78 ns, 0 B, 0 allocs | 291.90 ns, 16 B, 1 alloc | CTI Commons 3.18x faster
-CVSS 2.0 complete | 176.90 ns, 0 B, 0 allocs | 376.60 ns, 4 B, 1 alloc | CTI Commons 2.13x faster
-CVSS 3.0 complete | 172.60 ns, 0 B, 0 allocs | 491.00 ns, 8 B, 1 alloc | CTI Commons 2.84x faster
-CVSS 3.1 complete | 169.70 ns, 0 B, 0 allocs | 504.20 ns, 8 B, 1 alloc | CTI Commons 2.97x faster
-CVSS 4.0 complete | 184.50 ns, 0 B, 0 allocs | 413.00 ns, 16 B, 1 alloc | CTI Commons 2.24x faster
+CVSS 2.0 Base | 44.14 ns, 0 B, 0 allocs | 169.20 ns, 4 B, 1 alloc | Security Engineering Commons 3.83x faster
+CVSS 3.0 Base | 57.19 ns, 0 B, 0 allocs | 137.30 ns, 8 B, 1 alloc | Security Engineering Commons 2.40x faster
+CVSS 3.1 Base | 57.18 ns, 0 B, 0 allocs | 142.50 ns, 8 B, 1 alloc | Security Engineering Commons 2.49x faster
+CVSS 4.0 Base | 91.78 ns, 0 B, 0 allocs | 291.90 ns, 16 B, 1 alloc | Security Engineering Commons 3.18x faster
+CVSS 2.0 complete | 176.90 ns, 0 B, 0 allocs | 376.60 ns, 4 B, 1 alloc | Security Engineering Commons 2.13x faster
+CVSS 3.0 complete | 172.60 ns, 0 B, 0 allocs | 491.00 ns, 8 B, 1 alloc | Security Engineering Commons 2.84x faster
+CVSS 3.1 complete | 169.70 ns, 0 B, 0 allocs | 504.20 ns, 8 B, 1 alloc | Security Engineering Commons 2.97x faster
+CVSS 4.0 complete | 184.50 ns, 0 B, 0 allocs | 413.00 ns, 16 B, 1 alloc | Security Engineering Commons 2.24x faster
 
 **Canonical string encoding:**
 
-Version | CTI Commons | Pandatix | Relative result
+Version | Security Engineering Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
-CVSS 2.0 | 47.37 ns, 32 B, 1 alloc | 117.50 ns, 32 B, 1 alloc | CTI Commons 2.48x faster
-CVSS 3.0 | 52.75 ns, 48 B, 1 alloc | 151.50 ns, 48 B, 1 alloc | CTI Commons 2.87x faster
-CVSS 3.1 | 51.53 ns, 48 B, 1 alloc | 152.50 ns, 48 B, 1 alloc | CTI Commons 2.96x faster
-CVSS 4.0 | 130.50 ns, 64 B, 1 alloc | 214.00 ns, 64 B, 1 alloc | CTI Commons 1.64x faster
+CVSS 2.0 | 47.37 ns, 32 B, 1 alloc | 117.50 ns, 32 B, 1 alloc | Security Engineering Commons 2.48x faster
+CVSS 3.0 | 52.75 ns, 48 B, 1 alloc | 151.50 ns, 48 B, 1 alloc | Security Engineering Commons 2.87x faster
+CVSS 3.1 | 51.53 ns, 48 B, 1 alloc | 152.50 ns, 48 B, 1 alloc | Security Engineering Commons 2.96x faster
+CVSS 4.0 | 130.50 ns, 64 B, 1 alloc | 214.00 ns, 64 B, 1 alloc | Security Engineering Commons 1.64x faster
 
 **Lookup, replacement and scoring:**
 
-Operation | CTI Commons | Pandatix | Relative result
+Operation | Security Engineering Commons | Pandatix | Relative result
 --- | ---: | ---: | ---
 CVSS 2.0 lookup | 2.50 ns | 2.05 ns | Pandatix 1.22x faster
 CVSS 3.0 lookup | 3.26 ns | 2.75 ns | Pandatix 1.19x faster
 CVSS 3.1 lookup | 3.25 ns | 2.77 ns | Pandatix 1.17x faster
 CVSS 4.0 lookup | 3.34 ns | 3.14 ns | Pandatix 1.06x faster
-CVSS 2.0 replacement | 5.77 ns | 10.55 ns | CTI Commons 1.83x faster
+CVSS 2.0 replacement | 5.77 ns | 10.55 ns | Security Engineering Commons 1.83x faster
 CVSS 3.0 replacement | 11.42 ns | 5.30 ns | Pandatix 2.16x faster
 CVSS 3.1 replacement | 10.75 ns | 5.22 ns | Pandatix 2.06x faster
 CVSS 4.0 replacement | 6.55 ns | 3.24 ns | Pandatix 2.02x faster
 CVSS 2.0 Environmental score | 26.63 ns | 18.55 ns | Pandatix 1.44x faster
 CVSS 3.0 Environmental score | 40.77 ns | 21.45 ns | Pandatix 1.90x faster
 CVSS 3.1 Environmental score | 42.23 ns | 21.82 ns | Pandatix 1.94x faster
-CVSS 2.0 Base score | 1.38 ns | 8.56 ns | CTI Commons 6.22x faster
-CVSS 3.0 Base score | 2.46 ns | 9.43 ns | CTI Commons 3.83x faster
-CVSS 3.1 Base score | 2.46 ns | 9.97 ns | CTI Commons 4.06x faster
-CVSS 4.0 score | 132.60 ns | 292.40 ns | CTI Commons 2.21x faster
+CVSS 2.0 Base score | 1.38 ns | 8.56 ns | Security Engineering Commons 6.22x faster
+CVSS 3.0 Base score | 2.46 ns | 9.43 ns | Security Engineering Commons 3.83x faster
+CVSS 3.1 Base score | 2.46 ns | 9.97 ns | Security Engineering Commons 4.06x faster
+CVSS 4.0 score | 132.60 ns | 292.40 ns | Security Engineering Commons 2.21x faster
 
 Every operation in the final table reports 0 B/op and 0 allocs/op for both libraries
 
 Metric replacement is not a like-for-like contract. Pandatix's `Set` validates then mutates the object behind its pointer. `WithMetric` validates and returns a new compact value while leaving the source unchanged. Repeated benchmark replacement therefore measures different ownership semantics
 
-Base scoring is also not a like-for-like calculation. CTI Commons indexes a package-level table using the compact Base state while Pandatix calculates the score when requested. CTI Commons moves part of that work into parsing but remains faster for the complete parse-and-score path in the measured cases
+Base scoring is also not a like-for-like calculation. Security Engineering Commons indexes a package-level table using the compact Base state while Pandatix calculates the score when requested. Security Engineering Commons moves part of that work into parsing but remains faster for the complete parse-and-score path in the measured cases
 
-Environmental scoring is where Pandatix's directly addressable packed fields win. CTI Commons decodes a smaller mixed-radix state before applying the formula. Replacing that design with duplicated formulas, large lookup tables or scattered bit masks would improve this microbenchmark at the cost of memory or maintainability
+Environmental scoring is where Pandatix's directly addressable packed fields win. Security Engineering Commons decodes a smaller mixed-radix state before applying the formula. Replacing that design with duplicated formulas, large lookup tables or scattered bit masks would improve this microbenchmark at the cost of memory or maintainability
 
 **In-memory vector sizes:**
 
-Version | CTI Commons | Pandatix
+Version | Security Engineering Commons | Pandatix
 --- | ---: | ---:
 CVSS 2.0 | 4 bytes | 4 bytes
 CVSS 3.0 | 5 bytes | 6 bytes
@@ -260,9 +260,9 @@ bash ./.github/scripts/verify.sh benchmark
 
 ## Differential fuzzing
 
-The isolated [`differential`](differential) module compares CTI Commons with Pandatix v0.6.4 without adding Pandatix to the production module graph
+The isolated [`differential`](differential) module compares Security Engineering Commons with Pandatix v0.6.4 without adding Pandatix to the production module graph
 
-Native fuzz targets generate CVSS 2.0, 3.0 and 3.1 Base inputs. Inputs accepted by CTI Commons are encoded canonically, parsed by Pandatix then required to produce the same Base score. CVSS 4.0 uses the complete retained FIRST corpus and correction set because the implementations have documented score differences
+Native fuzz targets generate CVSS 2.0, 3.0 and 3.1 Base inputs. Inputs accepted by Security Engineering Commons are encoded canonically, parsed by Pandatix then required to produce the same Base score. CVSS 4.0 uses the complete retained FIRST corpus and correction set because the implementations have documented score differences
 
 The production module supports Go 1.24 and later. Pandatix v0.6.4 requires Go 1.25, so the isolated differential module is qualified with Go 1.25 and 1.26
 
@@ -273,7 +273,7 @@ bash ./.github/scripts/verify.sh campaign
 
 ## Help
 
-This microlib is primarily intended for CTI Commons. For help using it elsewhere, mention [@steadytao](https://github.com/steadytao) on GitHub or email me [mail@steadytao.com](mailto:mail@steadytao.com); I am happy to help whenever I have some free time :D
+This microlib is maintained by Security Engineering Commons and primarily intended for CTI Commons. For help using it elsewhere, mention [@steadytao](https://github.com/steadytao) on GitHub or email me [mail@steadytao.com](mailto:mail@steadytao.com); I am happy to help whenever I have some free time :D
 
 ## Licence
 

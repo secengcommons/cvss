@@ -4,10 +4,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/cticommons/cvss/cvss20"
-	"github.com/cticommons/cvss/cvss30"
-	"github.com/cticommons/cvss/cvss31"
-	"github.com/cticommons/cvss/cvss40"
+	"github.com/secengcommons/cvss/cvss20"
+	"github.com/secengcommons/cvss/cvss30"
+	"github.com/secengcommons/cvss/cvss31"
+	"github.com/secengcommons/cvss/cvss40"
 )
 
 var (

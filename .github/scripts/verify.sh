@@ -49,11 +49,11 @@ run_in_directory() (
 require_minimal_module_graph() {
   local modules
   modules=$(go list -m all)
-  if [[ "$modules" != 'github.com/cticommons/cvss' ]]; then
+  if [[ "$modules" != 'github.com/secengcommons/cvss' ]]; then
     printf 'Production module graph contains external modules:\n%s\n' "$modules" >&2
     return 1
   fi
-  printf 'Production module graph contains only github.com/cticommons/cvss\n'
+  printf 'Production module graph contains only github.com/secengcommons/cvss\n'
 }
 
 run_go_fix() (
@@ -454,9 +454,9 @@ run_benchmarks() (
   )
   for ((sample = 0; sample < samples; sample++)); do
     if ((sample % 2 == 0)); then
-      order='CTICommons Pandatix'
+      order='SecEngCommons Pandatix'
     else
-      order='Pandatix CTICommons'
+      order='Pandatix SecEngCommons'
     fi
     for benchmark in "${benchmarks[@]}"; do
       for implementation in $order; do
@@ -482,7 +482,7 @@ run_benchmarks() (
   printf 'benchmark\timplementation\tmedian_ns_op\tB_op\tallocs_op\n'
   middle=$((samples / 2 + 1))
   for benchmark in "${benchmarks[@]}"; do
-    for implementation in CTICommons Pandatix; do
+    for implementation in SecEngCommons Pandatix; do
       ns=$(awk -F '\t' -v benchmark="$benchmark" -v implementation="$implementation" \
         '$1 == benchmark && $2 == implementation { print $3 }' "$raw" | sort -n | sed -n "${middle}p")
       read -r bytes allocs < <(awk -F '\t' -v benchmark="$benchmark" -v implementation="$implementation" \
