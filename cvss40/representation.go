@@ -3,8 +3,8 @@ package cvss40
 import (
 	"strings"
 
-	"github.com/cticommons/cvss/internal/metricvalue"
-	"github.com/cticommons/cvss/internal/mixedradix"
+	"github.com/secengcommons/cvss/internal/metricvalue"
+	"github.com/secengcommons/cvss/internal/mixedradix"
 )
 
 const baseStateCount = 4 * 2 * 2 * 3 * 3 * 3 * 3 * 3 * 3 * 3 * 3

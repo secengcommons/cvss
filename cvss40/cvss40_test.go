@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cticommons/cvss/internal/testfixture"
+	"github.com/secengcommons/cvss/internal/testfixture"
 )
 
 type referenceVector struct {

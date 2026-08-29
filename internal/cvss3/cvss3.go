@@ -3,8 +3,8 @@ package cvss3
 import (
 	"strings"
 
-	"github.com/cticommons/cvss/internal/mixedradix"
-	"github.com/cticommons/cvss/internal/vectorinput"
+	"github.com/secengcommons/cvss/internal/mixedradix"
+	"github.com/secengcommons/cvss/internal/vectorinput"
 )
 
 const (

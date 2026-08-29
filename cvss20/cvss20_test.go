@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cticommons/cvss/internal/testfixture"
+	"github.com/secengcommons/cvss/internal/testfixture"
 )
 
 func TestPublishedScores(t *testing.T) {

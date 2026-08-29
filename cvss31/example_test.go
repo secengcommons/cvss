@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cticommons/cvss/cvss31"
+	"github.com/secengcommons/cvss/cvss31"
 )
 
 func ExampleVector_UnmarshalJSON() {

@@ -1,6 +1,6 @@
 package cvss20
 
-import "github.com/cticommons/cvss/internal/vectorinput"
+import "github.com/secengcommons/cvss/internal/vectorinput"
 
 // False for absent or unknown metrics
 func (vector Vector) Metric(name string) (Metric, bool) {

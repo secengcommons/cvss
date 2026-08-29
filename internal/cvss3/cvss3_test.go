@@ -1,11 +1,12 @@
 package cvss3
 
 import (
+	"math"
 	"slices"
 	"testing"
 
-	"github.com/cticommons/cvss/internal/metricvalue"
-	"github.com/cticommons/cvss/internal/vectorinput"
+	"github.com/secengcommons/cvss/internal/metricvalue"
+	"github.com/secengcommons/cvss/internal/vectorinput"
 )
 
 const baseVector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
@@ -304,8 +305,7 @@ func checkBaseScoring(t *testing.T) {
 	t.Helper()
 	for raw := range BaseStateCount {
 		metrics := encodeState(uint64(raw + 1)).Decode().Values
-		_ = Impact(metrics)
-		if Exploitability(metrics) <= 0 {
+		if math.IsNaN(Impact(metrics)) || Exploitability(metrics) <= 0 {
 			t.Fatalf("Base state %d produced invalid subscores", raw)
 		}
 	}

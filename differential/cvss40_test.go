@@ -9,9 +9,9 @@ import (
 	"io"
 	"testing"
 
-	cti40 "github.com/cticommons/cvss/cvss40"
-	"github.com/cticommons/cvss/internal/testfixture"
 	pandatix40 "github.com/pandatix/go-cvss/40"
+	sec40 "github.com/secengcommons/cvss/cvss40"
+	"github.com/secengcommons/cvss/internal/testfixture"
 )
 
 const (
@@ -80,13 +80,13 @@ func qualifyReference40(tb testing.TB, reference referenceVector40, corrections 
 		}
 		expected = correction.Score
 	}
-	ours, err := cti40.Parse(reference.Vector)
+	ours, err := sec40.Parse(reference.Vector)
 	if err != nil {
-		tb.Fatalf("CTI Commons rejected valid vector %q: %v", reference.Vector, err)
+		tb.Fatalf("Security Engineering Commons rejected valid vector %q: %v", reference.Vector, err)
 	}
 	score, err := ours.Score()
 	if err != nil || score.Float64() != expected {
-		tb.Fatalf("CTI Commons score for %q = %.1f, %v, want %.1f", reference.Vector, score.Float64(), err, expected)
+		tb.Fatalf("Security Engineering Commons score for %q = %.1f, %v, want %.1f", reference.Vector, score.Float64(), err, expected)
 	}
 	theirs, err := pandatix40.ParseVector(reference.Vector)
 	if err != nil {
