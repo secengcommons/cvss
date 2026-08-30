@@ -13,6 +13,7 @@ import (
 
 const controlTimeout = 10 * time.Minute
 const controlOutputLimit = 16 << 20
+const defaultFuzzJobs = 4
 
 func repositoryPolicy() (goverify.Repository, error) {
 	return repositoryPolicyWith(func() (string, error) { return executablePath("go", exec.LookPath) }, os.Executable, filepath.Abs)
@@ -67,7 +68,7 @@ func repositoryShape() goverify.Repository {
 			{Directory: ".", Path: "github.com/secengcommons/cvss"},
 			{Directory: "differential", Path: "github.com/secengcommons/cvss/differential"},
 		},
-		Fuzz: goverify.Campaign{Duration: fuzzWork(), Parallelism: fuzzParallelism()},
+		Fuzz: goverify.Campaign{Duration: fuzzWork(), Parallelism: fuzzParallelism(), Jobs: fuzzJobs()},
 		Compatibility: []goverify.Compatibility{
 			{Version: "go1.24.0", Scopes: []string{"Root"}},
 			{Version: "go1.25.0", Scopes: []string{"Differential", "Root", "Verification"}},
@@ -197,7 +198,7 @@ func executablePath(name string, lookPath func(string) (string, error)) (string,
 
 func selectedEnvironment() []string {
 	names := []string{
-		"BENCHSAMPLES", "BENCHTIME", "COMSPEC", "FUZZTIME", "FUZZ_PARALLEL", "HOME", "LOCALAPPDATA", "PATH", "PATHEXT",
+		"BENCHSAMPLES", "BENCHTIME", "COMSPEC", "FUZZTIME", "FUZZ_JOBS", "FUZZ_PARALLEL", "HOME", "LOCALAPPDATA", "PATH", "PATHEXT",
 		"SECVERIFY_ACTIONLINT", "SECVERIFY_BASH", "SECVERIFY_GOLANGCI", "SECVERIFY_GOVULNCHECK",
 		"SECVERIFY_POLICY", "SECVERIFY_POLICY_CONTRACT", "SECVERIFY_SHELLCHECK",
 		"SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "WINDIR",
@@ -227,4 +228,15 @@ func fuzzParallelism() int {
 		return 0
 	}
 	return 4
+}
+
+func fuzzJobs() int {
+	if value := os.Getenv("FUZZ_JOBS"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err == nil {
+			return parsed
+		}
+		return 0
+	}
+	return defaultFuzzJobs
 }
