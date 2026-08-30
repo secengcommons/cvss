@@ -1,8 +1,8 @@
 package cvss40
 
-// 270 CVSS 4.0 equivalence-class scores
+// CVSS 4.0 defines 270 equivalence-class scores
 // Indices encode EQ1 through EQ6; values are tenths
-// TestMacroVectors binds every populated value to testdata/first/v40-macro.json
+// TestMacroVectors binds every populated value to the retained macro fixture
 var macroScores = [324]int{
 	0:   100,
 	1:   99,
