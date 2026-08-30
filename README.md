@@ -15,7 +15,7 @@ CVSS 1.0 is unsupported. It doesn't define an interoperable vector format precis
   - [Identify a version](#identify-a-version)
   - [Change a metric](#change-a-metric)
   - [Encoding](#encoding)
-- [Comparison with pandatix/go-cvss](#comparison-with-pandatixgo-cvss)
+- [Comparison with `pandatix/go-cvss`](#comparison-with-pandatixgo-cvss)
   - [Different priorities](#different-priorities)
   - [CVSS 4.0 defect report](#cvss-40-defect-report)
   - [Benchmark method](#benchmark-method)
@@ -116,7 +116,7 @@ text, err := vector.AppendText(buffer[:0])
 
 The vector types implement `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `json.Marshaler` and `json.Unmarshaler`. Decoding replaces the receiver only after the complete input has passed validation
 
-## Comparison with pandatix/go-cvss
+## Comparison with `pandatix/go-cvss`
 
 [`pandatix/go-cvss`](https://github.com/pandatix/go-cvss) is an established and fast implementation. Its API and representation may be the better fit where in-place mutation matters more than immutable values
 
@@ -213,7 +213,7 @@ CVSS 3.0 Base score | 2.46 ns | 9.43 ns | Security Engineering Commons 3.83x fas
 CVSS 3.1 Base score | 2.46 ns | 9.97 ns | Security Engineering Commons 4.06x faster
 CVSS 4.0 score | 132.60 ns | 292.40 ns | Security Engineering Commons 2.21x faster
 
-Every operation in the final table reports 0 B/op and 0 allocs/op for both libraries
+Every operation in the final table reports zero bytes and zero allocations per operation for both libraries
 
 Metric replacement is not a like-for-like contract. Pandatix's `Set` validates then mutates the object behind its pointer. `WithMetric` validates and returns a new compact value while leaving the source unchanged. Repeated benchmark replacement therefore measures different ownership semantics
 
@@ -273,10 +273,10 @@ bash ./.github/scripts/verify.sh campaign
 
 ## Help
 
-This microlib is maintained by Security Engineering Commons and primarily intended for CTI Commons. For help using it elsewhere, mention [@steadytao](https://github.com/steadytao) on GitHub or email me [mail@steadytao.com](mailto:mail@steadytao.com); I am happy to help whenever I have some free time :D
+Security Engineering Commons maintains this microlib primarily for CTI Commons. For help using it elsewhere, mention [@steadytao](https://github.com/steadytao) on GitHub or email me [mail@steadytao.com](mailto:mail@steadytao.com); I am happy to help whenever I have some free time :D
 
 ## Licence
 
 All code is licensed under Apache 2.0, enjoy :D
 
-CVSS is owned by FIRST and used by permission. The APIs preserve canonical vectors so callers can publish them alongside scores as required by the CVSS licence
+FIRST owns CVSS and permits this use. The APIs preserve canonical vectors so callers can publish them alongside scores as required by the CVSS licence
