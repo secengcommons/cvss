@@ -42,6 +42,17 @@ func runWith(
 	currentDirectory func() (string, error),
 	buildPolicy func() (goverify.Repository, error),
 ) int {
+	return runWithOperations(ctx, arguments, stdout, stderr, currentDirectory, buildPolicy, goverify.RunMutations)
+}
+
+func runWithOperations(
+	ctx context.Context,
+	arguments []string,
+	stdout, stderr io.Writer,
+	currentDirectory func() (string, error),
+	buildPolicy func() (goverify.Repository, error),
+	runMutations func(context.Context, string, goverify.MutationCampaign, io.Writer) error,
+) int {
 	if len(arguments) == 0 || stdout == nil || stderr == nil {
 		return verify.ExitInvocation
 	}
@@ -57,7 +68,27 @@ func runWith(
 	if err != nil {
 		return writeFailure(stderr, err)
 	}
+	if handled, specialErr := runSpecial(ctx, root, policy, arguments[1:], stdout, runMutations); handled {
+		if specialErr != nil {
+			return writeFailure(stderr, specialErr)
+		}
+		return verify.ExitPass
+	}
 	return goverify.RunRepositoryCLI(ctx, root, policy, identity, arguments[1:], stdout, stderr)
+}
+
+func runSpecial(
+	ctx context.Context,
+	root string,
+	policy goverify.Repository,
+	arguments []string,
+	output io.Writer,
+	runMutations func(context.Context, string, goverify.MutationCampaign, io.Writer) error,
+) (bool, error) {
+	if len(arguments) != 1 || arguments[0] != "__cvss-formula-mutations" {
+		return false, nil
+	}
+	return true, runMutations(ctx, root, formulaMutations(policy.Go), output)
 }
 
 func diagnosticRun(
