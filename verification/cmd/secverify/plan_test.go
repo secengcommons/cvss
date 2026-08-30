@@ -62,8 +62,8 @@ func TestPlanHelpers(t *testing.T) {
 	if _, err = executablePath("fixture", func(string) (string, error) { return "", failure }); !errors.Is(err, failure) {
 		t.Fatalf("lookup error = %v", err)
 	}
-	if fuzzWork() == "" || fuzzParallelism() != 4 {
-		t.Fatalf("fuzz defaults = (%q, %d)", fuzzWork(), fuzzParallelism())
+	if fuzzWork() == "" || fuzzParallelism() != 4 || fuzzJobs() != 4 {
+		t.Fatalf("fuzz defaults = (%q, %d, %d)", fuzzWork(), fuzzParallelism(), fuzzJobs())
 	}
 }
 
@@ -94,6 +94,14 @@ func TestFuzzEnvironment(t *testing.T) {
 	t.Setenv("FUZZ_PARALLEL", "invalid")
 	if fuzzParallelism() != 0 {
 		t.Fatalf("invalid parallelism = %d", fuzzParallelism())
+	}
+	t.Setenv("FUZZ_JOBS", "3")
+	if fuzzJobs() != 3 {
+		t.Fatalf("fuzz jobs = %d", fuzzJobs())
+	}
+	t.Setenv("FUZZ_JOBS", "invalid")
+	if fuzzJobs() != 0 {
+		t.Fatalf("invalid fuzz jobs = %d", fuzzJobs())
 	}
 }
 
