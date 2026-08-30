@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	verify "github.com/secengcommons/verify"
@@ -63,6 +64,24 @@ func TestPlanHelpers(t *testing.T) {
 	}
 	if fuzzWork() == "" || fuzzParallelism() != 4 {
 		t.Fatalf("fuzz defaults = (%q, %d)", fuzzWork(), fuzzParallelism())
+	}
+}
+
+func TestFormulaMutations(t *testing.T) {
+	t.Parallel()
+	campaign := formulaMutations(goverify.Tool{Executable: "go"})
+	expected := []goverify.Mutation{
+		{Name: "cvss20-impact-weight", File: "cvss20/cvss20.go", Before: ".646", After: ".5", Package: "./cvss20", Test: "TestBaseMatchesIndependentFormula"},
+		{Name: "cvss20-rounding-boundary", File: "cvss20/cvss20.go", Before: "value*10 + .5", After: "value*10 + .4", Package: "./cvss20", Test: "TestBaseMatchesIndependentFormula"},
+		{Name: "cvss30-miss-cap", File: "internal/cvss3/scoring.go", Before: "pow15(miss-.02)", After: "0", Package: "./cvss30", Test: "TestEnvironmentalFormulaVersionBoundary"},
+		{Name: "cvss30-roundup", File: "internal/cvss3/scoring.go", Before: "if scaled > float64(result)", After: "if false", Package: "./cvss30", Test: "TestRoundupUsesDirectCeiling"},
+		{Name: "cvss31-miss-scaling", File: "internal/cvss3/scoring.go", Before: "pow13(miss*.9731-.02)", After: "pow15(miss-.02)", Package: "./cvss31", Test: "TestEnvironmentalFormulaVersionBoundary"},
+		{Name: "cvss31-rounding-boundary", File: "internal/cvss3/scoring.go", Before: "value*100000+.5", After: "value*100000+.4", Package: "./cvss31", Test: "TestRoundupUsesFiveDecimalIntermediate"},
+		{Name: "cvss40-macro-score", File: "cvss40/macro_scores.go", Before: "0:   100,", After: "0:   99,", Package: "./cvss40", Test: "TestMacroVectors"},
+		{Name: "cvss40-rounding-epsilon", File: "cvss40/cvss40.go", Before: "(value+epsilon)*10", After: "value*10", Package: "./cvss40", Test: "TestCompleteReferenceSet"},
+	}
+	if campaign.Go.Executable != "go" || !reflect.DeepEqual(campaign.Mutations, expected) {
+		t.Fatalf("formulaMutations = %#v", campaign)
 	}
 }
 

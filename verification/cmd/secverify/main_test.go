@@ -49,6 +49,44 @@ func TestRunWithFailures(t *testing.T) {
 	}
 }
 
+func TestRunSpecial(t *testing.T) {
+	t.Parallel()
+	failure := errors.New("mutation")
+	called := false
+	runner := func(_ context.Context, root string, campaign goverify.MutationCampaign, output io.Writer) error {
+		called = true
+		if root != "root" || len(campaign.Mutations) != 8 || output == nil {
+			t.Fatalf("mutation call = (%q, %d, %v)", root, len(campaign.Mutations), output)
+		}
+		return failure
+	}
+	policy := goverify.Repository{Go: goverify.Tool{Executable: "go"}}
+	if handled, err := runSpecial(t.Context(), "root", policy, []string{"other"}, io.Discard, runner); handled || err != nil || called {
+		t.Fatalf("unrecognised special = (%t, %v, %t)", handled, err, called)
+	}
+	if handled, err := runSpecial(t.Context(), "root", policy, []string{"__cvss-formula-mutations"}, io.Discard, runner); !handled || !errors.Is(err, failure) || !called {
+		t.Fatalf("formula special = (%t, %v, %t)", handled, err, called)
+	}
+}
+
+func TestRunWithFormulaMutationCommand(t *testing.T) {
+	t.Parallel()
+	policy := goverify.Repository{Go: goverify.Tool{Executable: "go"}}
+	buildPolicy := func() (goverify.Repository, error) { return policy, nil }
+	currentDirectory := func() (string, error) { return "root", nil }
+	success := func(context.Context, string, goverify.MutationCampaign, io.Writer) error { return nil }
+	arguments := []string{"secverify", "__cvss-formula-mutations"}
+	if code := runWithOperations(t.Context(), arguments, io.Discard, io.Discard, currentDirectory, buildPolicy, success); code != verify.ExitPass {
+		t.Fatalf("successful mutation exit = %d", code)
+	}
+	failure := func(context.Context, string, goverify.MutationCampaign, io.Writer) error {
+		return errors.New("mutation")
+	}
+	if code := runWithOperations(t.Context(), arguments, io.Discard, io.Discard, currentDirectory, buildPolicy, failure); code != verify.ExitFail {
+		t.Fatalf("failed mutation exit = %d", code)
+	}
+}
+
 func TestRunMainAndDispatch(t *testing.T) {
 	originalExit := exitProcess
 	originalArguments := os.Args

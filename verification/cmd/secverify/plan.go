@@ -45,8 +45,8 @@ func repositoryPolicyWith(
 	vulnerability := tool(paths.vulnerability, environment)
 	policy := repositoryShape()
 	policy.Self, policy.Go, policy.Linter, policy.Vulnerability = self, goTool, linter, vulnerability
-	policy.ExtraStatic = staticControls(goTool, linter, vulnerability, paths, environment)
-	policy.AdditionalProfiles = additionalProfiles(goTool, paths.bash, environment)
+	policy.ExtraStatic = staticControls(goTool, linter, vulnerability, paths, environment, self)
+	policy.AdditionalProfiles = additionalProfiles(goTool, paths.bash, environment, self)
 	return policy, nil
 }
 
@@ -98,17 +98,31 @@ func requiredToolPaths() (toolPaths, error) {
 	}, nil
 }
 
-func staticControls(goTool, linter, vulnerability goverify.Tool, paths toolPaths, environment []string) []verify.Control {
+func staticControls(goTool, linter, vulnerability goverify.Tool, paths toolPaths, environment []string, self string) []verify.Control {
 	controls := []verify.Control{
 		exactCommand("module_surface", "Module Surface", goTool, "", []string{"list", "-m", "all"}, "github.com/secengcommons/cvss\n"),
 		command("shell_syntax", "Shell Syntax", paths.bash, environment, "", "-n", ".github/scripts/verify.sh"),
 		command("shell_analysis", "Shell Analysis", paths.shellcheck, environment, "", ".github/scripts/verify.sh"),
 		command("workflow_syntax", "Workflow Syntax", paths.actionlint, environment, "", "-shellcheck="+paths.shellcheck),
-		command("legacy_self_test", "Legacy Self-Test", paths.bash, environment, "", ".github/scripts/verify.sh", "self-test"),
+		command("formula_mutations", "Formula Mutations", self, environment, "", "__cvss-formula-mutations"),
+		command("legacy_self_test", "Legacy Self-Test", paths.bash, environment, "", ".github/scripts/verify.sh", "legacy-self-test"),
 		command("central_policy", "Central Policy", paths.policy, environment, "", "repository-source", "--policy", paths.policyContract),
 	}
 	controls = append(controls, differentialControls(goTool, linter, vulnerability)...)
 	return append(controls, verificationControls(goTool, linter, vulnerability)...)
+}
+
+func formulaMutations(goTool goverify.Tool) goverify.MutationCampaign {
+	return goverify.MutationCampaign{Go: goTool, Mutations: []goverify.Mutation{
+		{Name: "cvss20-impact-weight", File: "cvss20/cvss20.go", Before: ".646", After: ".5", Package: "./cvss20", Test: "TestBaseMatchesIndependentFormula"},
+		{Name: "cvss20-rounding-boundary", File: "cvss20/cvss20.go", Before: "value*10 + .5", After: "value*10 + .4", Package: "./cvss20", Test: "TestBaseMatchesIndependentFormula"},
+		{Name: "cvss30-miss-cap", File: "internal/cvss3/scoring.go", Before: "pow15(miss-.02)", After: "0", Package: "./cvss30", Test: "TestEnvironmentalFormulaVersionBoundary"},
+		{Name: "cvss30-roundup", File: "internal/cvss3/scoring.go", Before: "if scaled > float64(result)", After: "if false", Package: "./cvss30", Test: "TestRoundupUsesDirectCeiling"},
+		{Name: "cvss31-miss-scaling", File: "internal/cvss3/scoring.go", Before: "pow13(miss*.9731-.02)", After: "pow15(miss-.02)", Package: "./cvss31", Test: "TestEnvironmentalFormulaVersionBoundary"},
+		{Name: "cvss31-rounding-boundary", File: "internal/cvss3/scoring.go", Before: "value*100000+.5", After: "value*100000+.4", Package: "./cvss31", Test: "TestRoundupUsesFiveDecimalIntermediate"},
+		{Name: "cvss40-macro-score", File: "cvss40/macro_scores.go", Before: "0:   100,", After: "0:   99,", Package: "./cvss40", Test: "TestMacroVectors"},
+		{Name: "cvss40-rounding-epsilon", File: "cvss40/cvss40.go", Before: "(value+epsilon)*10", After: "value*10", Package: "./cvss40", Test: "TestCompleteReferenceSet"},
+	}}
 }
 
 func differentialControls(goTool, linter, vulnerability goverify.Tool) []verify.Control {
@@ -139,7 +153,7 @@ func verificationControls(goTool, linter, vulnerability goverify.Tool) []verify.
 	return []verify.Control{fix, format, vet, lint, vulnerabilities}
 }
 
-func additionalProfiles(goTool goverify.Tool, bash string, environment []string) []verify.Profile {
+func additionalProfiles(goTool goverify.Tool, bash string, environment []string, self string) []verify.Profile {
 	rootTest := goverify.Test(goTool, "", "./...")
 	rootTest.ID, rootTest.Name = "platform_root", "Platform Root Test"
 	differentialTest := goverify.Test(goTool, "differential", "./...")
@@ -150,7 +164,8 @@ func additionalProfiles(goTool goverify.Tool, bash string, environment []string)
 			command("benchmark", "Benchmark", bash, environment, "", ".github/scripts/verify.sh", "benchmark"),
 		}},
 		{ID: "self-test", Name: "Self-Test", Controls: []verify.Control{
-			command("self_test", "Self-Test", bash, environment, "", ".github/scripts/verify.sh", "self-test"),
+			command("formula_mutations", "Formula Mutations", self, environment, "", "__cvss-formula-mutations"),
+			command("legacy_self_test", "Legacy Self-Test", bash, environment, "", ".github/scripts/verify.sh", "legacy-self-test"),
 		}},
 	}
 }

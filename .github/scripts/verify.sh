@@ -501,5 +501,6 @@ case "${1:-}" in
   campaign) run_campaign ;;
   benchmark) run_benchmarks ;;
   self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test; workflow_policy_self_test ;;
-  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|benchmark|self-test\n' "${0##*/}" >&2; exit 2 ;;
+  legacy-self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; workflow_policy_self_test ;;
+  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|benchmark|self-test|legacy-self-test\n' "${0##*/}" >&2; exit 2 ;;
 esac
