@@ -35,7 +35,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: 1.26.6
+          go-version-file: go.mod
           cache: true
       - name: Fuzz Root Module
         run: bash ./.github/scripts/verify.sh fuzz-root
@@ -54,7 +54,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: 1.26.6
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: differential/go.sum
       - name: Fuzz Differential Module
