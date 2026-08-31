@@ -45,6 +45,9 @@ Every package provides:
 CVSS 2.0, 3.0 and 3.1 also expose the specification-defined Impact and Exploitability subscores. CVSS 4.0 exposes its score nomenclature. CVSS 2.0 uses its historical unprefixed vector form. `CVSS:2.0/` is rejected
 
 ## Install
+The Security Engineering Commons module path is not released yet. Existing tags retain the historical `github.com/cticommons/cvss` module identity and cannot be required through the new path
+
+After the first Security Engineering Commons release:
 ```sh
 go get github.com/secengcommons/cvss
 ```
