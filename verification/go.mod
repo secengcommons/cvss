@@ -1,7 +1,6 @@
 module github.com/secengcommons/cvss/verification
 
 go 1.24.0
-
 toolchain go1.26.6
 
 require github.com/secengcommons/verify v0.0.0
