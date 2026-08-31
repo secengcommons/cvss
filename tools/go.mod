@@ -6,6 +6,7 @@ toolchain go1.26.6
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/rhysd/actionlint/cmd/actionlint
+	github.com/tetratelabs/wazero/cmd/wazero
 	github.com/wasilibs/go-shellcheck/cmd/shellcheck
 	golang.org/x/vuln/cmd/govulncheck
 )
@@ -193,7 +194,7 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/tetafro/godot v1.5.6 // indirect
-	github.com/tetratelabs/wazero v1.9.0 // indirect
+	github.com/tetratelabs/wazero v1.12.0 // indirect
 	github.com/timakin/bodyclose v0.0.0-20260129054331-73d1f95b84b4 // indirect
 	github.com/timonwong/loggercheck v0.11.0 // indirect
 	github.com/tomarrell/wrapcheck/v2 v2.12.0 // indirect

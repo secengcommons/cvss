@@ -1,0 +1,78 @@
+name: WebAssembly
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '15 15 * * 0'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: wasm-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOTOOLCHAIN: local
+  GOWORK: off
+
+jobs:
+  javascript:
+    name: JavaScript
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.6
+          cache: false
+      - name: Test Root Module
+        shell: bash
+        run: |
+          GOOS=js GOARCH=wasm go test -count=1 -shuffle=on \
+            -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./...
+      - name: Test Differential Module
+        shell: bash
+        run: |
+          GOOS=js GOARCH=wasm go -C differential test -count=1 -shuffle=on \
+            -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./...
+
+  wasi:
+    name: WASI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.6
+          cache: true
+          cache-dependency-path: tools/go.sum
+      - name: Test Root Module
+        shell: bash
+        run: |
+          wazero=$(go -C tools tool -n wazero)
+          PATH="$(dirname "$wazero"):$PATH" GOWASIRUNTIME=wazero GOOS=wasip1 GOARCH=wasm \
+            go test -count=1 -shuffle=on -exec="$(go env GOROOT)/lib/wasm/go_wasip1_wasm_exec" ./...
+      - name: Test Differential Module
+        shell: bash
+        run: |
+          wazero=$(go -C tools tool -n wazero)
+          PATH="$(dirname "$wazero"):$PATH" GOWASIRUNTIME=wazero GOOS=wasip1 GOARCH=wasm \
+            go -C differential test -count=1 -shuffle=on \
+              -exec="$(go env GOROOT)/lib/wasm/go_wasip1_wasm_exec" ./...

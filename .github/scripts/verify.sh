@@ -46,6 +46,13 @@ run_in_directory() (
   "$@"
 )
 
+run_tool_build() (
+  local output
+  output=$(mktemp "${TMPDIR:-/tmp}/secengcommons-cvss-tool-build.XXXXXX")
+  trap 'rm -f -- "$output"' EXIT
+  go -C "$repository_root/tools" build -trimpath -o "$output" ./cimatrix
+)
+
 require_minimal_module_graph() {
   local modules
   modules=$(go list -m all)
@@ -260,7 +267,7 @@ check_workflow_references() (
         fi
         action=${reference%%@*}
         case "$action" in
-          actions/checkout|actions/setup-go|actions/dependency-review-action|github/codeql-action/init|github/codeql-action/analyze) ;;
+          actions/checkout|actions/setup-go|actions/dependency-review-action|cross-platform-actions/action|github/codeql-action/init|github/codeql-action/analyze) ;;
           *) printf 'Workflow action is not approved: %s\n' "$action" >&2; return 1 ;;
         esac
       elif [[ "$line" =~ (^|[^A-Za-z0-9_-])uses([^A-Za-z0-9_-]|$) ]]; then
@@ -366,15 +373,21 @@ run_static() {
   fi
   step 'Go Fix' run_go_fix "$repository_root"
   step 'Differential Go Fix' run_go_fix "$repository_root/differential"
+  step 'Tool Go Fix' run_go_fix "$repository_root/tools"
   step 'Go Format' "$golangci" fmt --diff
   step 'Differential Go Format' run_in_directory "$repository_root/differential" "$golangci" fmt --config ../.golangci.yml --diff
+  step 'Tool Go Format' run_in_directory "$repository_root/tools" "$golangci" fmt --config ../.golangci.yml --diff
   step 'Go Vet' go vet ./...
   step 'Differential Go Vet' go -C differential vet ./...
+  step 'Tool Go Vet' go -C tools vet ./cimatrix
   step 'Go Lint' "$golangci" run
   step 'Differential Go Lint' run_in_directory "$repository_root/differential" "$golangci" run --config ../.golangci.yml ./...
+  step 'Tool Go Lint' run_in_directory "$repository_root/tools" "$golangci" run --config ../.golangci.yml ./cimatrix
   step 'Go Vulnerabilities' "$govulncheck" ./...
   step 'Differential Vulnerabilities' run_in_directory "$repository_root/differential" "$govulncheck" ./...
+  step 'Tool Vulnerabilities' run_in_directory "$repository_root/tools" "$govulncheck" ./cimatrix
   step 'Go Build' go build -trimpath ./...
+  step 'Tool Go Build' run_tool_build
 }
 
 run_tests() {
@@ -382,8 +395,10 @@ run_tests() {
   step 'Go Toolchain' require_toolchain
   step 'Go Test and Coverage' run_coverage "$repository_root"
   step 'Differential Go Test' go -C differential test -count=1 -shuffle=on ./...
+  step 'Tool Go Test and Coverage' run_coverage "$repository_root/tools"
   step 'Go Race' go test -race -count=1 -shuffle=on ./...
   step 'Differential Go Race' go -C differential test -race -count=1 -shuffle=on ./...
+  step 'Tool Go Race' go -C tools test -race -count=1 -shuffle=on ./cimatrix
 }
 
 run_platform() {
@@ -398,6 +413,7 @@ run_compatibility() {
   step 'Go 1.24 Compatibility' env GOTOOLCHAIN=go1.24.0 go test -count=1 -shuffle=on ./...
   step 'Go 1.25 Compatibility' env GOTOOLCHAIN=go1.25.0 go test -count=1 -shuffle=on ./...
   step 'Differential Go 1.25 Compatibility' run_in_directory "$repository_root/differential" env GOTOOLCHAIN=go1.25.0 go test -count=1 -shuffle=on ./...
+  step 'Tool Go 1.25 Compatibility' run_in_directory "$repository_root/tools" env GOTOOLCHAIN=go1.25.0 go test -count=1 -shuffle=on ./cimatrix
 }
 
 run_fuzz_module() (
@@ -423,6 +439,18 @@ run_campaign() {
   cd -- "$repository_root"
   step 'Go Toolchain' require_toolchain
   run_fuzz_module "$repository_root"
+  run_fuzz_module "$repository_root/differential"
+}
+
+run_root_fuzz() {
+  cd -- "$repository_root"
+  step 'Go Toolchain' require_toolchain
+  run_fuzz_module "$repository_root"
+}
+
+run_differential_fuzz() {
+  cd -- "$repository_root"
+  step 'Go Toolchain' require_toolchain
   run_fuzz_module "$repository_root/differential"
 }
 
@@ -499,8 +527,10 @@ case "${1:-}" in
   test) run_tests ;;
   platform) run_platform ;;
   campaign) run_campaign ;;
+  fuzz-root) run_root_fuzz ;;
+  fuzz-differential) run_differential_fuzz ;;
   benchmark) run_benchmarks ;;
   self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test; workflow_policy_self_test ;;
   legacy-self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; workflow_policy_self_test ;;
-  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|benchmark|self-test|legacy-self-test\n' "${0##*/}" >&2; exit 2 ;;
+  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|fuzz-root|fuzz-differential|benchmark|self-test|legacy-self-test\n' "${0##*/}" >&2; exit 2 ;;
 esac
