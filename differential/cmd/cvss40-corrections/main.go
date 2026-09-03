@@ -27,6 +27,9 @@ const (
 	decodedSHA256     = "0bcc7bb6227d75d24dd1dc89db1c903649e4b951837e573abf290d255d9523bd"
 	validRecords      = 41270
 	correctionRecords = 157
+	minimumScore      = 0
+	maximumScore      = 10
+	scoreScale        = 10
 	// Output permits 32 bytes for every expected JSON score
 	calculatorOutputBytes = validRecords * 32
 	// Diagnostics are retained only for bounded failure reporting
@@ -47,6 +50,8 @@ process.stdin.on("end", () => {
   process.stdout.write(JSON.stringify(material.vectors.map(vector => new CVSS40(vector).score)));
 });`
 
+var exitProcess = os.Exit
+
 type reference struct {
 	Vector string  `json:"vector"`
 	Valid  bool    `json:"valid"`
@@ -60,35 +65,74 @@ type correction struct {
 }
 
 func main() {
-	calculator := flag.String("calculator", "", "path to the pinned Red Hat cvss40.js")
-	corpus := flag.String("corpus", "../testdata/first/v40-reference-complete.json.gz", "path to the retained FIRST corpus")
-	node := flag.String("node", "node", "Node.js executable")
-	flag.Parse()
-	if *calculator == "" || flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: cvss40-corrections -calculator <cvss40.js> [-corpus <corpus>] [-node <node>]")
-		os.Exit(2)
+	exitProcess(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(arguments []string, stdout, stderr io.Writer) int {
+	return runWith(arguments, stdout, stderr, generate)
+}
+
+func runWith(arguments []string, stdout, stderr io.Writer, generateCorrections func(string, string, string) ([]byte, error)) int {
+	if stdout == nil || stderr == nil || generateCorrections == nil {
+		return 2
 	}
-	result, err := generate(*node, *calculator, *corpus)
+	flags := flag.NewFlagSet("cvss40-corrections", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	calculator := flags.String("calculator", "", "path to the pinned Red Hat cvss40.js")
+	corpus := flags.String("corpus", "../testdata/first/v40-reference-complete.json.gz", "path to the retained FIRST corpus")
+	node := flags.String("node", "node", "Node.js executable")
+	if err := flags.Parse(arguments); err != nil {
+		return 2
+	}
+	if *calculator == "" || flags.NArg() != 0 {
+		if writeDiagnostic(stderr, "usage: cvss40-corrections -calculator <cvss40.js> [-corpus <corpus>] [-node <node>]\n") != nil {
+			return 2
+		}
+		return 2
+	}
+	result, err := generateCorrections(*node, *calculator, *corpus)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "generate CVSS 4.0 corrections: %v\n", err)
-		os.Exit(1)
+		if writeDiagnostic(stderr, "generate CVSS 4.0 corrections: %v\n", err) != nil {
+			return 2
+		}
+		return 1
 	}
-	if _, err := os.Stdout.Write(result); err != nil {
-		fmt.Fprintf(os.Stderr, "write corrections: %v\n", err)
-		os.Exit(1)
+	if err = writeAll(stdout, result); err != nil {
+		if writeDiagnostic(stderr, "write corrections: %v\n", err) != nil {
+			return 2
+		}
+		return 1
 	}
+	return 0
+}
+
+func writeDiagnostic(writer io.Writer, format string, arguments ...any) error {
+	return writeAll(writer, fmt.Appendf(nil, format, arguments...))
 }
 
 func generate(node, calculatorPath, corpusPath string) ([]byte, error) {
-	calculator, err := readExact(calculatorPath, calculatorLength, calculatorSHA256)
+	return generateWith(node, calculatorPath, corpusPath, generationOperations{
+		read: readExact, decode: decodeCorpus, calculate: calculate, marshal: json.Marshal,
+	})
+}
+
+type generationOperations struct {
+	read      func(string, int, string) ([]byte, error)
+	decode    func([]byte) ([]reference, error)
+	calculate func(string, []byte, []string) ([]float64, error)
+	marshal   func(any) ([]byte, error)
+}
+
+func generateWith(node, calculatorPath, corpusPath string, operations generationOperations) ([]byte, error) {
+	calculator, err := operations.read(calculatorPath, calculatorLength, calculatorSHA256)
 	if err != nil {
 		return nil, fmt.Errorf("calculator: %w", err)
 	}
-	compressed, err := readExact(corpusPath, corpusLength, corpusSHA256)
+	compressed, err := operations.read(corpusPath, corpusLength, corpusSHA256)
 	if err != nil {
 		return nil, fmt.Errorf("corpus: %w", err)
 	}
-	references, err := decodeCorpus(compressed)
+	references, err := operations.decode(compressed)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +145,7 @@ func generate(node, calculatorPath, corpusPath string) ([]byte, error) {
 	if len(vectors) != validRecords {
 		return nil, fmt.Errorf("valid records = %d, want %d", len(vectors), validRecords)
 	}
-	scores, err := calculate(node, calculator, vectors)
+	scores, err := operations.calculate(node, calculator, vectors)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +156,32 @@ func generate(node, calculatorPath, corpusPath string) ([]byte, error) {
 	if len(corrections) != correctionRecords {
 		return nil, fmt.Errorf("correction records = %d, want %d", len(corrections), correctionRecords)
 	}
-	return json.Marshal(corrections)
+	return operations.marshal(corrections)
+}
+
+func writeAll(writer io.Writer, value []byte) error {
+	for len(value) != 0 {
+		written, err := writer.Write(value)
+		if written < 0 || written > len(value) {
+			return errors.New("writer returned an invalid count")
+		}
+		value = value[written:]
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrNoProgress
+		}
+	}
+	return nil
 }
 
 func readExact(path string, length int, digest string) ([]byte, error) {
-	absolute, err := filepath.Abs(path)
+	return readExactWith(path, length, digest, filepath.Abs)
+}
+
+func readExactWith(path string, length int, digest string, absolutePath func(string) (string, error)) ([]byte, error) {
+	absolute, err := absolutePath(path)
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +193,14 @@ func readExact(path string, length int, digest string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Join(err, root.Close())
 	}
-	data, readErr := io.ReadAll(io.LimitReader(file, int64(length)+1))
-	closeErr := errors.Join(file.Close(), root.Close())
+	return readExactSource(file, func() error {
+		return errors.Join(file.Close(), root.Close())
+	}, length, digest)
+}
+
+func readExactSource(reader io.Reader, closeSource func() error, length int, digest string) ([]byte, error) {
+	data, readErr := io.ReadAll(io.LimitReader(reader, int64(length)+1))
+	closeErr := closeSource()
 	if readErr != nil {
 		return nil, errors.Join(readErr, closeErr)
 	}
@@ -147,7 +218,13 @@ func readExact(path string, length int, digest string) ([]byte, error) {
 }
 
 func decodeCorpus(compressed []byte) ([]reference, error) {
-	reader, err := gzip.NewReader(bytes.NewReader(compressed))
+	return decodeCorpusWith(compressed, func(reader io.Reader) (io.ReadCloser, error) {
+		return gzip.NewReader(io.LimitReader(reader, corpusLength+1))
+	})
+}
+
+func decodeCorpusWith(compressed []byte, open func(io.Reader) (io.ReadCloser, error)) ([]reference, error) {
+	reader, err := open(bytes.NewReader(compressed))
 	if err != nil {
 		return nil, fmt.Errorf("open corpus: %w", err)
 	}
@@ -166,6 +243,10 @@ func decodeCorpus(compressed []byte) ([]reference, error) {
 	if hex.EncodeToString(sum[:]) != decodedSHA256 {
 		return nil, errors.New("decoded corpus SHA-256 mismatch")
 	}
+	return decodeReferences(data)
+}
+
+func decodeReferences(data []byte) ([]reference, error) {
 	var references []reference
 	if err := json.Unmarshal(data, &references); err != nil {
 		return nil, fmt.Errorf("decode corpus: %w", err)
@@ -174,22 +255,40 @@ func decodeCorpus(compressed []byte) ([]reference, error) {
 }
 
 func calculate(node string, calculator []byte, vectors []string) ([]float64, error) {
-	input, err := json.Marshal(struct {
+	return calculateWith(context.Background(), node, calculator, vectors, json.Marshal, runCalculator, calculatorTimeout)
+}
+
+type calculatorRun func(context.Context, string, []byte, io.Writer, io.Writer) error
+
+func runCalculator(ctx context.Context, node string, input []byte, stdout, stderr io.Writer) error {
+	command := exec.CommandContext(ctx, node, "-e", nodeProgram)
+	command.Stdin = bytes.NewReader(input)
+	command.Stdout = stdout
+	command.Stderr = stderr
+	return command.Run()
+}
+
+func calculateWith(
+	parent context.Context,
+	node string,
+	calculator []byte,
+	vectors []string,
+	marshal func(any) ([]byte, error),
+	run calculatorRun,
+	timeout time.Duration,
+) ([]float64, error) {
+	input, err := marshal(struct {
 		Calculator string   `json:"calculator"`
 		Vectors    []string `json:"vectors"`
 	}{Calculator: string(calculator), Vectors: vectors})
 	if err != nil {
 		return nil, fmt.Errorf("encode vectors: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), calculatorTimeout)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	command := exec.CommandContext(ctx, node, "-e", nodeProgram)
-	command.Stdin = bytes.NewReader(input)
 	output := boundedBuffer{maximum: calculatorOutputBytes}
 	diagnostics := boundedBuffer{maximum: calculatorErrorBytes}
-	command.Stdout = &output
-	command.Stderr = &diagnostics
-	err = command.Run()
+	err = run(ctx, node, input, &output, &diagnostics)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("calculator deadline: %w", ctx.Err())
@@ -215,18 +314,18 @@ func calculate(node string, calculator []byte, vectors []string) ([]float64, err
 }
 
 func validScore(score float64) bool {
-	return score >= 0 && score <= 10 && score == math.Round(score*10)/10
+	return score >= minimumScore && score <= maximumScore && score == math.Round(score*scoreScale)/scoreScale
 }
 
 type boundedBuffer struct {
-	bytes.Buffer
+	buffer   bytes.Buffer
 	maximum  int
 	overflow bool
 }
 
 func (buffer *boundedBuffer) Write(data []byte) (int, error) {
 	written := len(data)
-	remaining := buffer.maximum - buffer.Len()
+	remaining := buffer.maximum - buffer.buffer.Len()
 	if remaining <= 0 {
 		buffer.overflow = true
 		return written, nil
@@ -235,9 +334,13 @@ func (buffer *boundedBuffer) Write(data []byte) (int, error) {
 		data = data[:remaining]
 		buffer.overflow = true
 	}
-	_, _ = buffer.Buffer.Write(data)
+	_, _ = buffer.buffer.Write(data)
 	return written, nil
 }
+
+func (buffer *boundedBuffer) Bytes() []byte { return buffer.buffer.Bytes() }
+
+func (buffer *boundedBuffer) String() string { return buffer.buffer.String() }
 
 func derive(references []reference, scores []float64) ([]correction, error) {
 	corrections := make([]correction, 0, correctionRecords)
