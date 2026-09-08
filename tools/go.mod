@@ -1,11 +1,12 @@
 module github.com/secengcommons/cvss/tools
 
 go 1.25.0
-toolchain go1.26.6
+toolchain go1.27.1
 
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/rhysd/actionlint/cmd/actionlint
+	github.com/secengcommons/verify/cmd/secverify
 	github.com/tetratelabs/wazero/cmd/wazero
 	github.com/wasilibs/go-shellcheck/cmd/shellcheck
 	golang.org/x/vuln/cmd/govulncheck
@@ -177,6 +178,9 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/sashamelentyev/interfacebloat v1.1.0 // indirect
 	github.com/sashamelentyev/usestdlibvars v1.29.0 // indirect
+	github.com/secengcommons/cli v1.0.0 // indirect
+	github.com/secengcommons/proctree v1.0.0 // indirect
+	github.com/secengcommons/verify v1.0.0-alpha2 // indirect
 	github.com/securego/gosec/v2 v2.26.1 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/sivchari/containedctx v1.0.3 // indirect
@@ -216,10 +220,10 @@ require (
 	go.augendre.info/fatcontext v0.9.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.3 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260209203927-2842357ff358 // indirect
-	golang.org/x/mod v0.39.0 // indirect
+	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
