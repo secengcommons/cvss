@@ -16,7 +16,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOTOOLCHAIN: local
   GOWORK: off
 
 jobs:
