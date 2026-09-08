@@ -8,10 +8,18 @@ import (
 	"time"
 
 	"github.com/secengcommons/proctree"
+	"github.com/secengcommons/verify"
 )
 
 const moduleOutputLimit = 64 << 10
 const operationTimeout = 5 * time.Minute
+
+func TestMain(testingMain *testing.M) {
+	if handled, code := verify.DispatchProcessOwner(os.Args); handled {
+		os.Exit(code)
+	}
+	os.Exit(testingMain.Run())
+}
 
 func TestProductionModuleGraphRemainsEmpty(t *testing.T) {
 	root, err := filepath.Abs("..")
