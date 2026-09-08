@@ -57,5 +57,5 @@ func operationEnvironment() []string {
 			result = append(result, name+"="+value)
 		}
 	}
-	return append(result, "GOTOOLCHAIN=auto", "GOWORK=off")
+	return append(result, "GOTOOLCHAIN=local", "GOWORK=off")
 }
