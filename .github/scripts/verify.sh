@@ -529,8 +529,9 @@ case "${1:-}" in
   campaign) run_campaign ;;
   fuzz-root) run_root_fuzz ;;
   fuzz-differential) run_differential_fuzz ;;
+  mutation) cd -- "$repository_root"; formula_mutation_self_test ;;
   benchmark) run_benchmarks ;;
   self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; formula_mutation_self_test; workflow_policy_self_test ;;
   legacy-self-test) cd -- "$repository_root"; coverage_self_test; modernisation_self_test; workflow_policy_self_test ;;
-  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|fuzz-root|fuzz-differential|benchmark|self-test|legacy-self-test\n' "${0##*/}" >&2; exit 2 ;;
+  *) printf 'Usage: %s all|static|compatibility|test|platform|campaign|fuzz-root|fuzz-differential|mutation|benchmark|self-test|legacy-self-test\n' "${0##*/}" >&2; exit 2 ;;
 esac
