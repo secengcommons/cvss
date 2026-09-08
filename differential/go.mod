@@ -8,4 +8,6 @@ require (
 	github.com/secengcommons/cvss v1.1.2
 )
 
+require github.com/stretchr/testify v1.12.1 // indirect
+
 replace github.com/secengcommons/cvss => ..
