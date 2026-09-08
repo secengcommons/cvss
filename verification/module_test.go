@@ -1,14 +1,17 @@
 package verification
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/secengcommons/proctree"
 )
 
 const moduleOutputLimit = 64 << 10
+const operationTimeout = 5 * time.Minute
 
 func TestProductionModuleGraphRemainsEmpty(t *testing.T) {
 	root, err := filepath.Abs("..")
@@ -21,7 +24,7 @@ func TestProductionModuleGraphRemainsEmpty(t *testing.T) {
 	}
 	result, err := proctree.Run(t.Context(), proctree.Command{
 		Executable: executable, Arguments: []string{"-C", root, "list", "-m", "all"}, Directory: root,
-		Environment: mutationEnvironment(), StdoutLimit: moduleOutputLimit, StderrLimit: moduleOutputLimit, Timeout: mutationTimeout,
+		Environment: operationEnvironment(), StdoutLimit: moduleOutputLimit, StderrLimit: moduleOutputLimit, Timeout: operationTimeout,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -29,4 +32,22 @@ func TestProductionModuleGraphRemainsEmpty(t *testing.T) {
 	if string(result.Stdout) != "github.com/secengcommons/cvss\n" || len(result.Stderr) != 0 {
 		t.Fatalf("module graph = (%q, %q)", result.Stdout, result.Stderr)
 	}
+}
+
+func goExecutableName() string {
+	if os.PathSeparator == '\\' {
+		return "go.exe"
+	}
+	return "go"
+}
+
+func operationEnvironment() []string {
+	names := []string{"HOME", "LOCALAPPDATA", "PATH", "PATHEXT", "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "WINDIR"}
+	result := make([]string, 0, len(names)+2)
+	for _, name := range names {
+		if value, found := os.LookupEnv(name); found {
+			result = append(result, name+"="+value)
+		}
+	}
+	return append(result, "GOTOOLCHAIN=auto", "GOWORK=off")
 }

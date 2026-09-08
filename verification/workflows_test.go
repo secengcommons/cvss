@@ -62,6 +62,9 @@ func checkWorkflowActions(t *testing.T, source []byte) {
 }
 
 func approvedWorkflowAction(action string) bool {
+	if strings.HasPrefix(action, "secengcommons/ci/.github/workflows/") {
+		return true
+	}
 	switch action {
 	case "actions/checkout", "actions/dependency-review-action", "actions/setup-go", "cross-platform-actions/action",
 		"github/codeql-action/analyze", "github/codeql-action/init":
