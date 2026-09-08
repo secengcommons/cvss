@@ -51,7 +51,7 @@ After the first SecEng Commons release:
 go get github.com/secengcommons/cvss
 ```
 
-Note that Go 1.24 or greater is required
+Requires Go 1.26 or newer
 
 ## Use
 ```go
@@ -281,7 +281,7 @@ The isolated [`differential`](differential) module compares SecEng Commons with 
 
 Native fuzz targets generate CVSS 2.0, 3.0 and 3.1 Base inputs. Inputs accepted by SecEng Commons are encoded canonically, parsed by Pandatix then required to produce the same Base score. CVSS 4.0 uses the complete retained FIRST corpus and correction set because the implementations have documented score differences
 
-The production module supports Go 1.24 and later. Pandatix v0.6.4 requires Go 1.25, so the isolated differential module is qualified with Go 1.25 and 1.26
+All modules require Go 1.26 or later
 
 Run the bounded campaign with:
 ```sh
