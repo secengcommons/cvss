@@ -5,7 +5,7 @@ toolchain go1.27.1
 
 require (
 	github.com/secengcommons/proctree v1.0.0
-	github.com/secengcommons/verify v1.0.0-alpha2
+	github.com/secengcommons/verify v1.0.0-alpha3
 )
 
 require (
