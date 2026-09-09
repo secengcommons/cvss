@@ -7,7 +7,6 @@ tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/secengcommons/verify/cmd/secverify
 	github.com/tetratelabs/wazero/cmd/wazero
-	github.com/wasilibs/go-shellcheck/cmd/shellcheck
 	golang.org/x/vuln/cmd/govulncheck
 )
 
@@ -201,7 +200,6 @@ require (
 	github.com/ultraware/whitespace v0.2.0 // indirect
 	github.com/uudashr/gocognit v1.2.1 // indirect
 	github.com/uudashr/iface v1.5.1 // indirect
-	github.com/wasilibs/go-shellcheck v0.11.1 // indirect
 	github.com/xen0n/gosmopolitan v1.3.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yagipy/maintidx v1.0.0 // indirect
