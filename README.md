@@ -252,23 +252,22 @@ The dev gate also runs strict linting, go vet, vulnerability checks, race tests,
 
 Run the complete gate with:
 ```sh
-bash ./.github/scripts/verify.sh all
+go -C tools tool secverify --root .. all
 ```
 
-GitHub Actions keeps each assurance owner at one visible workflow level:
+GitHub Actions keeps every assurance owner inside one CI workflow:
 
-Workflow | Evidence
+Group | Evidence
 --- | ---
-Core | Static controls, complete coverage, Linux tests and race detection
-Compatibility | Every stable Go release from the declared `go` floor through the exact `toolchain` release
-Native Platforms | GitHub-hosted Linux, Windows and macOS releases across x64 and ARM64
-Go Ports | Production and test compilation for every target reported by the exact Go toolchain
-Virtual Platforms | Test execution on FreeBSD, OpenBSD, NetBSD, DragonFly BSD and OmniOS VMs
-WebAssembly | JavaScript execution through Node and WASI execution through pinned wazero
-Fuzzing | Bounded pull-request campaigns and longer scheduled campaigns for both modules
-Security | CodeQL for Go and workflows plus pull-request dependency review
+Verify | Static analysis, Go compatibility, complete coverage, race and fuzzing
+Linux, Windows and macOS | Native execution on hosted AMD64 and ARM64 runners
+Go ports | Compilation for every target reported by the selected Go toolchain
+Containers and virtual platforms | Alpine Linux, BSD, illumos and Solaris execution
+CodeQL and Dependencies | Code scanning and pull-request dependency review
+Formula | Eight retained scoring mutations
+WebAssembly | JavaScript execution through Node and WASI execution through wazero
 
-Native and virtual jobs prove execution on the named platform. Port jobs prove compilation only. AIX, Android, iOS, Plan 9 and Oracle Solaris have no retained runtime owner; OmniOS qualifies illumos rather than Oracle Solaris. Preview GitHub runner images are excluded from the required green set because GitHub provides them without service guarantees
+Native and virtual jobs prove execution on the named platform. Go ports prove compilation only
 
 Run benchmarks with:
 ```sh
@@ -285,7 +284,7 @@ All modules require Go 1.26 or later
 
 Run the bounded campaign with:
 ```sh
-bash ./.github/scripts/verify.sh campaign
+go -C tools tool secverify --root .. campaign
 ```
 
 ## Licence
