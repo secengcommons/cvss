@@ -45,7 +45,7 @@ CVSS 2.0, 3.0 and 3.1 also expose the specification-defined Impact and Exploitab
 
 ## Install
 ```sh
-go get github.com/secengcommons/cvss@v1.2.0
+go get github.com/secengcommons/cvss@v1.2.1
 ```
 
 Requires Go 1.26 or newer
